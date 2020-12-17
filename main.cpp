@@ -1,12 +1,16 @@
 #include <math.h>    // smallpssmlt, primary sample space MLT by Toshiya Hachisuka
 #include <stdio.h>   // Usage: ./smallpssmlt time_sec
 #include <stdlib.h>  // derived from smallpt, a path tracer by Kevin Beason, 2008
+
+#include <cmath>     // derived from smallpt, a path tracer by Kevin Beason, 2008
+#include <iostream>  // derived from smallpt, a path tracer by Kevin Beason, 2008
+
+#include "Sphere.hpp"   // derived from smallpt, a path tracer by Kevin Beason, 2008
+#include "Vector3.hpp"  // derived from smallpt, a path tracer by Kevin Beason, 2008
 // 2015/01/26: Changed the default parameters. Fixed the bug that the normal was incorrectly flipped for diffuse
 // surfaces (thanks to Hao Qin).
 
 #define PI ((double) 3.14159265358979)
-#define MAX(x, y) ((x > y) ? x : y)
-#define MIN(x, y) ((x < y) ? x : y)
 
 // parameters
 #define MinPathLength 3  // avoid sampling direct illumination
@@ -68,40 +72,6 @@ double rnd(void) {
   return (w = (w ^ (w >> 19)) ^ (t ^ (t >> 8))) * (1.0 / 4294967296.0);
 }
 
-// vector: position, also color (r,g,b) (extended from smallpt)
-struct Vec {
-  double x, y, z;
-  Vec(double x_ = 0, double y_ = 0, double z_ = 0) {
-    x = x_;
-    y = y_;
-    z = z_;
-  }
-  inline Vec operator-() const { return Vec(-x, -y, -z); }
-  inline Vec operator+(const Vec& b) const { return Vec(x + b.x, y + b.y, z + b.z); }
-  inline Vec operator-(const Vec& b) const { return Vec(x - b.x, y - b.y, z - b.z); }
-  inline Vec operator+(double b) const { return Vec(x + b, y + b, z + b); }
-  inline Vec operator-(double b) const { return Vec(x - b, y - b, z - b); }
-  inline Vec operator*(double b) const { return Vec(x * b, y * b, z * b); }
-  inline Vec mul(const Vec& b) const { return Vec(x * b.x, y * b.y, z * b.z); }
-  inline Vec norm() { return (*this) * (1.0 / sqrt(x * x + y * y + z * z)); }
-  inline double dot(const Vec& b) const { return x * b.x + y * b.y + z * b.z; }
-  Vec operator%(const Vec& b) const { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
-  inline Vec reflect(const Vec& n) const { return (*this) - n * 2.0 * n.dot((*this)); }
-  inline double Max() const { return MAX(MAX(x, y), z); }
-  inline Vec onb(const Vec& n) const {
-    Vec u, w, v = n;
-    if (n.z < -0.9999999) {
-      u = Vec(0.0, -1.0, 0.0);
-      w = Vec(-1.0, 0.0, 0.0);
-    } else {
-      const double a = 1.0 / (1.0 + n.z);
-      const double b = -n.x * n.y * a;
-      u = Vec(1.0 - n.x * n.x * a, b, -n.x);
-      w = Vec(b, 1.0 - n.y * n.y * a, -n.y);
-    }
-    return Vec((*this).dot(Vec(u.x, v.x, w.x)), (*this).dot(Vec(u.y, v.y, w.y)), (*this).dot(Vec(u.z, v.z, w.z)));
-  }
-};
 Vec VecRandom(const double rnd1, const double rnd2) {
   const double temp1 = 2.0 * PI * rnd1, temp2 = 2.0 * rnd2 - 1.0;
   const double s = sin(temp1), c = cos(temp1), t = sqrt(1.0 - temp2 * temp2);
@@ -113,28 +83,7 @@ Vec VecCosine(const Vec n, const double g, const double rnd1, const double rnd2)
   return Vec(s * t, temp2, c * t).onb(n);
 }
 
-// ray-sphere intersection (extended from smallpt)
-struct Ray {
-  Vec o, d;
-  Ray(){};
-  Ray(Vec o_, Vec d_) : o(o_), d(d_) {}
-};
-enum Refl_t { DIFF, GLOS, LGHT };  // material types, used in radiance()
-struct Sphere {
-  double rad;
-  Vec p, c;
-  Refl_t refl;
-  Sphere(double r_, Vec p_, Vec c_, Refl_t re_) : rad(r_), p(p_), c(c_), refl(re_) {}
-  inline double intersect(const Ray& r) const {  // returns distance
-    Vec op = p - r.o;
-    double t, b = op.dot(r.d), det = b * b - op.dot(op) + rad * rad;
-    if (det < 0)
-      return 1e20;
-    else
-      det = sqrt(det);
-    return (t = b - det) > 1e-4 ? t : ((t = b + det) > 1e-4 ? t : 1e20);
-  }
-} sph[] = {  // Scene: radius, position, color, material
+Sphere sph[] = {  // Scene: radius, position, color, material
     Sphere(6.0, Vec(10, 70, 51.6), Vec(100., 100., 100.), LGHT),
     Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(0.75, 0.25, 0.25), GLOS),
     Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(0.25, 0.25, 0.75), GLOS),
@@ -146,7 +95,7 @@ struct Sphere {
     Sphere(16.5, Vec(19, 16.5, 25), Vec(0.99, 0.99, 0.99), GLOS),
     Sphere(16.5, Vec(77, 16.5, 78), Vec(0.99, 0.99, 0.99), GLOS)};
 #define light_id 0
-#define light_area (4.0 * PI * sph[light_id].rad * sph[light_id].rad)
+#define light_area (4.0 * PI * sph[light_id].radius * sph[light_id].radius)
 bool intersect(const Ray& r, double& t, int& id) {  // ray-sphere intrsect.
   int n = sizeof(sph) / sizeof(Sphere);
   double d, inf = 1e20;
@@ -301,11 +250,11 @@ inline double GlossyBRDF(const Vec wi, const Vec n, const Vec wo) {
   const double won = wo.dot(n);
   const double win = wi.dot(n);
   const Vec r = (-wi).reflect(n);
-  return (Glossiness + 2.0) / (2.0 * PI) * pow(MAX(r.dot(wo), 0.0), Glossiness) / MAX(fabs(win), fabs(won));
+  return (Glossiness + 2.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), Glossiness) / std::fmax(fabs(win), fabs(won));
 }
 inline double GlossyPDF(const Vec wi, const Vec n, const Vec wo) {
   const Vec r = (-wi).reflect(n);
-  return (Glossiness + 1.0) / (2.0 * PI) * pow(MAX(r.dot(wo), 0.0), Glossiness);
+  return (Glossiness + 1.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), Glossiness);
 }
 
 inline double LambertianBRDF(const Vec wi, const Vec n, const Vec wo) { return 1.0 / PI; }
@@ -328,7 +277,7 @@ Vec PathThroughput(const Path Xb) {
       if (sph[Xb.x[i].id].refl == LGHT) {
         const Vec d0 = (Xb.x[i - 1].p - Xb.x[i].p).norm();
         const double L = LambertianBRDF(d0, Xb.x[i].n, d0);
-        f = f.mul(sph[Xb.x[i].id].c * L);
+        f = f.mul(sph[Xb.x[i].id].color * L);
       } else {
         f = f * 0.0;
       }
@@ -341,7 +290,7 @@ Vec PathThroughput(const Path Xb) {
       } else if (sph[Xb.x[i].id].refl == GLOS) {
         BRDF = GlossyBRDF(d0, Xb.x[i].n, d1);
       }
-      f = f.mul(sph[Xb.x[i].id].c * BRDF * GeometryTerm(Xb.x[i], Xb.x[i + 1]));
+      f = f.mul(sph[Xb.x[i].id].color * BRDF * GeometryTerm(Xb.x[i], Xb.x[i + 1]));
     }
     if (f.Max() == 0.0) return f;
   }
@@ -478,7 +427,7 @@ void TracePath(Path& path, const Ray r, const int RayLevel, const int MaxRayLeve
   int id;
   if (!intersect(r, t, id)) return;
   const Sphere& obj = sph[id];
-  Vec p = r.o + r.d * t, n = (p - obj.p).norm();
+  Vec p = r.o + r.d * t, n = (p - obj.position).norm();
   n = n.dot(r.d) < 0 ? n : n * -1;
 
   // set path data
@@ -500,7 +449,7 @@ void TracePath(Path& path, const Ray r, const int RayLevel, const int MaxRayLeve
 
 Ray SampleLightSources(const double rnd1, const double rnd2) {
   const Vec d = VecRandom(rnd1, rnd2);
-  return Ray(sph[light_id].p + (d * sph[light_id].rad), d);
+  return Ray(sph[light_id].position + (d * sph[light_id].radius), d);
 }
 Path GenerateLightPath(const int MaxLightEvents) {
   Path Result;
@@ -553,7 +502,7 @@ double MISWeight(const Path SampledPath, const int NumEyeVertices, const int Num
   if ((p_i == 0.0) || (p_all == 0.0)) {
     return 0.0;
   } else {
-    return MAX(MIN(p_i / p_all, 1.0), 0.0);
+    return std::fmax(std::fmin(p_i / p_all, 1.0), 0.0);
   }
 }
 
@@ -609,7 +558,7 @@ PathContribution CombinePaths(const Path EyePath, const Path LightPath, const in
       Result.n++;
 
       // scalar contribution function
-      Result.sc = MAX(c.Max(), Result.sc);
+      Result.sc = std::fmax(c.Max(), Result.sc);
 
       // return immediately if the technique is specified
       if (Specified && (SpecifiedNumEyeVertices == NumEyeVertices) && (SpecifiedNumLightVertices == NumLightVertices))
@@ -622,8 +571,9 @@ PathContribution CombinePaths(const Path EyePath, const Path LightPath, const in
 // main rendering process
 int main(int argc, char* argv[]) {
   unsigned long samps = 0;
-  const int ltime = (argc == 2) ? MAX(atoi(argv[1]), 0) : 60 * 3;
-  static const char* progr = "|\-/";
+  const int ltime = (argc == 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
+  std::cout << ltime << std::endl;
+  static const char* progr = "|*-/";
   FILE* f;
 
   Camera.set(Vec(50.0, 40.8, 220.0), Vec(50.0, 40.8, 0.0), 40.0);
@@ -669,7 +619,7 @@ int main(int argc, char* argv[]) {
     proposal.C = CombinePaths(GenerateEyePath(MaxEvents), GenerateLightPath(MaxEvents));
 
     double a = 1.0;
-    if (current.C.sc > 0.0) a = MAX(MIN(1.0, proposal.C.sc / current.C.sc), 0.0);
+    if (current.C.sc > 0.0) a = std::fmax(std::fmin(1.0, proposal.C.sc / current.C.sc), 0.0);
 
     // accumulate samples
     if (proposal.C.sc > 0.0)
@@ -685,7 +635,9 @@ int main(int argc, char* argv[]) {
   fprintf(f, "P6\n%d %d\n%d\n", PixelWidth, PixelHeight, 255);
   double s = double(PixelWidth * PixelHeight) / double(samps);
   for (int i = 0; i < PixelWidth * PixelHeight; i++) {
-    unsigned char c[3] = {toInt(img[i].x * s), toInt(img[i].y * s), toInt(img[i].z * s)};
+    unsigned char c[3] = {static_cast<unsigned char>(toInt(img[i].x * s)),
+                          static_cast<unsigned char>(toInt(img[i].y * s)),
+                          static_cast<unsigned char>(toInt(img[i].z * s))};
     fwrite(&c[0], 3, 1, f);
   }
 }

@@ -10,57 +10,24 @@
 // 2015/01/26: Changed the default parameters. Fixed the bug that the normal was incorrectly flipped for diffuse
 // surfaces (thanks to Hao Qin).
 
-#define PI ((double) 3.14159265358979)
+const double PI =  3.14159265358979;
 
 // parameters
-#define MinPathLength 3  // avoid sampling direct illumination
-#define MaxPathLength 20
-#define Glossiness 25.0
-#define PixelWidth 640
-#define PixelHeight 480
-#define N_Init 10000
-#define LargeStepProb 0.3
+const int minPathLength = 3;  // avoid sampling direct illumination
+const int maxPathLength = 20;
+const double glossiness = 25.0;
+const int pixelWidth = 640;
+const int pixelHeight = 480;
+const int N_Init = 10000;
+const double largeStepProb = 0.3;
 
 // scene independent constants
-#define NumRNGsPerEvent 2
-#define MaxEvents (MaxPathLength + 1)
-#define NumStatesSubpath ((MaxEvents + 2) * NumRNGsPerEvent)
-#define NumStates (NumStatesSubpath * 2)
+const int numRNGsPerEvent = 2;
+const int maxEvents = (maxPathLength + 1);
+const int numStatesSubpath = ((maxEvents + 2) * numRNGsPerEvent);
+const int numStates = (numStatesSubpath * 2);
 
-// time measurement
-#if defined(_WIN32)
-#include <time.h>
-#include <windows.h>
-struct timezone {
-  int tz_minuteswest, tz_dsttime;
-};
-int gettimeofday(struct timeval* tv, struct timezone* tz) {
-  FILETIME ft;
-  unsigned __int64 tmpres = 0;
-  static int tzflag;
-  if (NULL != tv) {
-    GetSystemTimeAsFileTime(&ft);
-    tmpres |= ft.dwHighDateTime;
-    tmpres <<= 32;
-    tmpres |= ft.dwLowDateTime;
-    tmpres -= 11644473600000000;
-    tmpres /= 10;
-    tv->tv_sec = (long) (tmpres / 1000000UL);
-    tv->tv_usec = (long) (tmpres % 1000000UL);
-  }
-  if (NULL != tz) {
-    if (!tzflag) {
-      _tzset();
-      tzflag++;
-    }
-    tz->tz_minuteswest = _timezone / 60;
-    tz->tz_dsttime = _daylight;
-  }
-  return 0;
-}
-#else
 #include <sys/time.h>
-#endif
 
 // xorshift PRNG
 double rnd(void) {
@@ -94,8 +61,10 @@ Sphere sph[] = {  // Scene: radius, position, color, material
     Sphere(20, Vec(50, 20, 50), Vec(0.25, 0.75, 0.25), DIFF),
     Sphere(16.5, Vec(19, 16.5, 25), Vec(0.99, 0.99, 0.99), GLOS),
     Sphere(16.5, Vec(77, 16.5, 78), Vec(0.99, 0.99, 0.99), GLOS)};
-#define light_id 0
-#define light_area (4.0 * PI * sph[light_id].radius * sph[light_id].radius)
+
+const int light_id = 0;
+const double light_area = (4.0 * PI * sph[light_id].radius * sph[light_id].radius);
+
 bool intersect(const Ray& r, double& t, int& id) {  // ray-sphere intrsect.
   int n = sizeof(sph) / sizeof(Sphere);
   double d, inf = 1e20;
@@ -132,16 +101,17 @@ struct TCamera {
   double dist;
   void set(const Vec o_, const Vec l_, const double fov_) {
     o = o_;
-    dist = PixelHeight / (2.0 * tan((fov_ / 2.0) * (PI / 180.0)));
+    dist = pixelHeight / (2.0 * tan((fov_ / 2.0) * (PI / 180.0)));
     w = (l_ - o_).norm();
     u = (w % Vec(0.0, 1.0, 0.0)).norm();
     v = u % w;
   }
 } Camera;
-#define camera_id -2
+
+const int camera_id = -2;
 
 // image
-Vec img[PixelWidth * PixelHeight];
+Vec img[pixelWidth * pixelHeight];
 
 // tone mapping
 int toInt(double x) { return int(pow(1 - exp(-x), 1 / 2.2) * 255 + .5); }
@@ -154,7 +124,7 @@ struct Vert {
   Vert(Vec p_, Vec n_, int id_) : p(p_), n(n_), id(id_) {}
 };
 struct Path {
-  Vert x[MaxEvents];
+  Vert x[maxEvents];
   int n;
   Path() { n = 0; }
 };
@@ -165,7 +135,7 @@ struct Contribution {
   Contribution(double x_, double y_, Vec c_) : x(x_), y(y_), c(c_) {}
 };
 struct PathContribution {
-  Contribution c[MaxEvents * MaxEvents];
+  Contribution c[maxEvents * maxEvents];
   int n;
   double sc;
   PathContribution() {
@@ -178,8 +148,8 @@ void AccumulatePathContribution(const PathContribution pc, const double mScaling
   for (int i = 0; i < pc.n; i++) {
     const int ix = int(pc.c[i].x), iy = int(pc.c[i].y);
     const Vec c = pc.c[i].c * mScaling;
-    if ((ix < 0) || (ix >= PixelWidth) || (iy < 0) || (iy >= PixelHeight)) continue;
-    img[ix + iy * PixelWidth] = img[ix + iy * PixelWidth] + c;
+    if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) continue;
+    img[ix + iy * pixelWidth] = img[ix + iy * pixelWidth] + c;
   }
 }
 
@@ -199,15 +169,15 @@ inline double perturb(const double value, const double s1, const double s2) {
   return Result;
 }
 struct TMarkovChain {
-  double u[NumStates];
+  double u[numStates];
   PathContribution C;
   TMarkovChain() {
-    for (int i = 0; i < NumStates; i++) u[i] = rnd();
+    for (int i = 0; i < numStates; i++) u[i] = rnd();
   }
   TMarkovChain large_step() const {
     TMarkovChain Result;
     Result.C = (*this).C;
-    for (int i = 0; i < NumStates; i++) Result.u[i] = rnd();
+    for (int i = 0; i < numStates; i++) Result.u[i] = rnd();
     return Result;
   }
   TMarkovChain mutate() const {
@@ -215,23 +185,23 @@ struct TMarkovChain {
     Result.C = (*this).C;
 
     // pixel location
-    Result.u[0] = perturb(u[0], 2.0 / double(PixelWidth + PixelHeight), 0.1);
-    Result.u[1] = perturb(u[1], 2.0 / double(PixelWidth + PixelHeight), 0.1);
+    Result.u[0] = perturb(u[0], 2.0 / double(pixelWidth + pixelHeight), 0.1);
+    Result.u[1] = perturb(u[1], 2.0 / double(pixelWidth + pixelHeight), 0.1);
 
     // the rest
-    for (int i = 2; i < NumStates; i++) Result.u[i] = perturb(u[i], 1.0 / 1024.0, 1.0 / 64.0);
+    for (int i = 2; i < numStates; i++) Result.u[i] = perturb(u[i], 1.0 / 1024.0, 1.0 / 64.0);
     return Result;
   }
 };
 
 // internal states of random numbers
 int PathRndsOffset;
-double prnds[NumStates];
+double prnds[numStates];
 void InitRandomNumbersByChain(const TMarkovChain MC) {
-  for (int i = 0; i < NumStates; i++) prnds[i] = MC.u[i];
+  for (int i = 0; i < numStates; i++) prnds[i] = MC.u[i];
 }
 void InitRandomNumbers() {
-  for (int i = 0; i < NumStates; i++) prnds[i] = rnd();
+  for (int i = 0; i < numStates; i++) prnds[i] = rnd();
 }
 
 // local sampling PDFs and standard terms
@@ -250,11 +220,11 @@ inline double GlossyBRDF(const Vec wi, const Vec n, const Vec wo) {
   const double won = wo.dot(n);
   const double win = wi.dot(n);
   const Vec r = (-wi).reflect(n);
-  return (Glossiness + 2.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), Glossiness) / std::fmax(fabs(win), fabs(won));
+  return (glossiness + 2.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), glossiness) / std::fmax(fabs(win), fabs(won));
 }
 inline double GlossyPDF(const Vec wi, const Vec n, const Vec wo) {
   const Vec r = (-wi).reflect(n);
-  return (Glossiness + 1.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), Glossiness);
+  return (glossiness + 1.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), glossiness);
 }
 
 inline double LambertianBRDF(const Vec wi, const Vec n, const Vec wo) { return 1.0 / PI; }
@@ -265,7 +235,7 @@ Vec PathThroughput(const Path Xb) {
   Vec f = Vec(1.0, 1.0, 1.0);
   for (int i = 0; i < Xb.n; i++) {
     if (i == 0) {
-      double W = 1.0 / double(PixelWidth * PixelHeight);
+      double W = 1.0 / double(pixelWidth * pixelHeight);
       Vec d0 = Xb.x[1].p - Xb.x[0].p;
       const double dist2 = d0.dot(d0);
       d0 = d0 * (1.0 / sqrt(dist2));
@@ -330,9 +300,9 @@ bool isConnectable(const Path Xeye, const Path Xlight, double& px, double& py) {
   // get the pixel location
   Vec ScreenCenter = Camera.o + (Camera.w * Camera.dist);
   Vec ScreenPosition = Camera.o + (Direction * (Camera.dist / Direction.dot(Camera.w))) - ScreenCenter;
-  px = Camera.u.dot(ScreenPosition) + (PixelWidth * 0.5);
-  py = -Camera.v.dot(ScreenPosition) + (PixelHeight * 0.5);
-  return Result && ((px >= 0) && (px < PixelWidth) && (py >= 0) && (py < PixelHeight));
+  px = Camera.u.dot(ScreenPosition) + (pixelWidth * 0.5);
+  py = -Camera.v.dot(ScreenPosition) + (pixelHeight * 0.5);
+  return Result && ((px >= 0) && (px < pixelWidth) && (py >= 0) && (py < pixelHeight));
 }
 
 // path probability density
@@ -364,7 +334,7 @@ double PathProbablityDensity(const Path SampledPath, const int PathLength, const
         // cancel out)
         p = p * 1.0;
       } else if (i == 0) {
-        p = p * 1.0 / double(PixelWidth * PixelHeight);
+        p = p * 1.0 / double(pixelWidth * pixelHeight);
         Vec Direction0 = (SampledPath.x[1].p - SampledPath.x[0].p).norm();
         double CosTheta = Direction0.dot(Camera.w);
         double DistanceToScreen2 = Camera.dist / CosTheta;
@@ -433,8 +403,8 @@ void TracePath(Path& path, const Ray r, const int RayLevel, const int MaxRayLeve
   // set path data
   path.x[path.n] = Vert(p, n, id);
   path.n++;
-  const double rnd0 = prnds[(RayLevel - 1) * NumRNGsPerEvent + 0 + PathRndsOffset];
-  const double rnd1 = prnds[(RayLevel - 1) * NumRNGsPerEvent + 1 + PathRndsOffset];
+  const double rnd0 = prnds[(RayLevel - 1) * numRNGsPerEvent + 0 + PathRndsOffset];
+  const double rnd1 = prnds[(RayLevel - 1) * numRNGsPerEvent + 1 + PathRndsOffset];
 
   Ray nr;
   nr.o = p;
@@ -442,7 +412,7 @@ void TracePath(Path& path, const Ray r, const int RayLevel, const int MaxRayLeve
     nr.d = VecCosine(n, 1.0, rnd0, rnd1);
     TracePath(path, nr, RayLevel + 1, MaxRayLevel);
   } else if (obj.refl == GLOS) {
-    nr.d = VecCosine(r.d.reflect(n), Glossiness, rnd0, rnd1);
+    nr.d = VecCosine(r.d.reflect(n), glossiness, rnd0, rnd1);
     TracePath(path, nr, RayLevel + 1, MaxRayLevel);
   }
 }
@@ -456,15 +426,15 @@ Path GenerateLightPath(const int MaxLightEvents) {
   Result.n = 0;
 
   if (MaxLightEvents == 0) return Result;
-  for (int i = 0; i < MaxEvents; i++) Result.x[i].id = -1;
-  PathRndsOffset = NumStatesSubpath;
+  for (int i = 0; i < maxEvents; i++) Result.x[i].id = -1;
+  PathRndsOffset = numStatesSubpath;
 
   Ray r = SampleLightSources(prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
   const Vec n = r.d;
-  PathRndsOffset += NumRNGsPerEvent;
+  PathRndsOffset += numRNGsPerEvent;
 
   r.d = VecCosine(n, 1.0, prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
-  PathRndsOffset += NumRNGsPerEvent;
+  PathRndsOffset += numRNGsPerEvent;
 
   Result.x[0] = Vert(r.o, n, light_id);
   Result.n++;
@@ -473,8 +443,8 @@ Path GenerateLightPath(const int MaxLightEvents) {
 }
 
 Ray SampleCamera(const double rnd1, const double rnd2) {
-  const Vec su = Camera.u * -(0.5 - rnd1) * PixelWidth;
-  const Vec sv = Camera.v * (0.5 - rnd2) * PixelHeight;
+  const Vec su = Camera.u * -(0.5 - rnd1) * pixelWidth;
+  const Vec sv = Camera.v * (0.5 - rnd2) * pixelHeight;
   const Vec sw = Camera.w * Camera.dist;
   return Ray(Camera.o, (su + sv + sw).norm());
 }
@@ -483,11 +453,11 @@ Path GenerateEyePath(const int MaxEyeEvents) {
   Result.n = 0;
 
   if (MaxEyeEvents == 0) return Result;
-  for (int i = 0; i < MaxEvents; i++) Result.x[i].id = -1;
+  for (int i = 0; i < maxEvents; i++) Result.x[i].id = -1;
   PathRndsOffset = 0;
 
   Ray r = SampleCamera(prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
-  PathRndsOffset += NumRNGsPerEvent;
+  PathRndsOffset += numRNGsPerEvent;
 
   Result.x[0] = Vert(r.o, Camera.w, camera_id);
   Result.n++;
@@ -515,8 +485,8 @@ PathContribution CombinePaths(const Path EyePath, const Path LightPath, const in
   Result.sc = 0.0;
   const bool Specified = (SpecifiedNumEyeVertices != -1) && (SpecifiedNumLightVertices != -1);
 
-  // MaxEvents = the maximum number of vertices
-  for (int PathLength = MinPathLength; PathLength <= MaxPathLength; PathLength++) {
+  // maxEvents = the maximum number of vertices
+  for (int PathLength = minPathLength; PathLength <= maxPathLength; PathLength++) {
     for (int NumEyeVertices = 0; NumEyeVertices <= PathLength + 1; NumEyeVertices++) {
       const int NumLightVertices = (PathLength + 1) - NumEyeVertices;
 
@@ -587,7 +557,7 @@ int main(int argc, char* argv[]) {
   for (int i = 0; i < N_Init; i++) {
     fprintf(stderr, "\rPSSMLT Initializing: %5.2f", 100.0 * i / (N_Init));
     InitRandomNumbers();
-    b += CombinePaths(GenerateEyePath(MaxEvents), GenerateLightPath(MaxEvents)).sc;
+    b += CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents)).sc;
   }
   b /= double(N_Init);
   fprintf(stderr, "\n");
@@ -595,20 +565,20 @@ int main(int argc, char* argv[]) {
   // initialize the Markov chain
   TMarkovChain current, proposal;
   InitRandomNumbersByChain(current);
-  current.C = CombinePaths(GenerateEyePath(MaxEvents), GenerateLightPath(MaxEvents));
+  current.C = CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents));
 
   // integration
   for (;;) {
     samps++;
     fprintf(stderr, "\rPSSMLT %c", progr[(samps >> 8) & 3]);
-    if (samps % PixelWidth) {
+    if (samps % pixelWidth) {
       gettimeofday(&currentTime, NULL);
       if (ltime < ((currentTime.tv_sec - startTime.tv_sec) + (currentTime.tv_usec - startTime.tv_usec) * 1.0E-6)) break;
     }
 
     // sample the path
     double isLargeStepDone;
-    if (rnd() <= LargeStepProb) {
+    if (rnd() <= largeStepProb) {
       proposal = current.large_step();
       isLargeStepDone = 1.0;
     } else {
@@ -616,15 +586,15 @@ int main(int argc, char* argv[]) {
       isLargeStepDone = 0.0;
     }
     InitRandomNumbersByChain(proposal);
-    proposal.C = CombinePaths(GenerateEyePath(MaxEvents), GenerateLightPath(MaxEvents));
+    proposal.C = CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents));
 
     double a = 1.0;
     if (current.C.sc > 0.0) a = std::fmax(std::fmin(1.0, proposal.C.sc / current.C.sc), 0.0);
 
     // accumulate samples
     if (proposal.C.sc > 0.0)
-      AccumulatePathContribution(proposal.C, (a + isLargeStepDone) / (proposal.C.sc / b + LargeStepProb));
-    if (current.C.sc > 0.0) AccumulatePathContribution(current.C, (1.0 - a) / (current.C.sc / b + LargeStepProb));
+      AccumulatePathContribution(proposal.C, (a + isLargeStepDone) / (proposal.C.sc / b + largeStepProb));
+    if (current.C.sc > 0.0) AccumulatePathContribution(current.C, (1.0 - a) / (current.C.sc / b + largeStepProb));
 
     // update the chain
     if (rnd() <= a) current = proposal;
@@ -632,9 +602,9 @@ int main(int argc, char* argv[]) {
 
   // write out .ppm
   f = fopen("image_pssmlt.ppm", "wb");
-  fprintf(f, "P6\n%d %d\n%d\n", PixelWidth, PixelHeight, 255);
-  double s = double(PixelWidth * PixelHeight) / double(samps);
-  for (int i = 0; i < PixelWidth * PixelHeight; i++) {
+  fprintf(f, "P6\n%d %d\n%d\n", pixelWidth, pixelHeight, 255);
+  double s = double(pixelWidth * pixelHeight) / double(samps);
+  for (int i = 0; i < pixelWidth * pixelHeight; i++) {
     unsigned char c[3] = {static_cast<unsigned char>(toInt(img[i].x * s)),
                           static_cast<unsigned char>(toInt(img[i].y * s)),
                           static_cast<unsigned char>(toInt(img[i].z * s))};

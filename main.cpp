@@ -2,7 +2,8 @@
 #include <stdio.h>   // Usage: ./smallpssmlt time_sec
 #include <stdlib.h>  // derived from smallpt, a path tracer by Kevin Beason, 2008
 
-#include <cmath>     // derived from smallpt, a path tracer by Kevin Beason, 2008
+#include <cmath>  // derived from smallpt, a path tracer by Kevin Beason, 2008
+#include <fstream>
 #include <iostream>  // derived from smallpt, a path tracer by Kevin Beason, 2008
 
 #include "Sphere.hpp"   // derived from smallpt, a path tracer by Kevin Beason, 2008
@@ -10,7 +11,7 @@
 // 2015/01/26: Changed the default parameters. Fixed the bug that the normal was incorrectly flipped for diffuse
 // surfaces (thanks to Hao Qin).
 
-const double PI =  3.14159265358979;
+const double PI = 3.14159265358979;
 
 // parameters
 const int minPathLength = 3;  // avoid sampling direct illumination
@@ -111,22 +112,25 @@ struct TCamera {
 const int camera_id = -2;
 
 // image
-Vec img[pixelWidth * pixelHeight];
+Vec image[pixelWidth * pixelHeight];
 
 // tone mapping
 int toInt(double x) { return int(pow(1 - exp(-x), 1 / 2.2) * 255 + .5); }
 
 // path data
-struct Vert {
+struct Vertex {
   Vec p, n;
   int id;
-  Vert(){};
-  Vert(Vec p_, Vec n_, int id_) : p(p_), n(n_), id(id_) {}
+  Vertex(){};
+  Vertex(Vec p_, Vec n_, int id_) : p(p_), n(n_), id(id_) {}
 };
 struct Path {
-  Vert x[maxEvents];
+  Vertex vertices[maxEvents];
   int n;
   Path() { n = 0; }
+
+  Vertex& operator[](int index) { return vertices[index]; }
+  Vertex operator[](int index) const { return vertices[index]; }
 };
 struct Contribution {
   double x, y;
@@ -149,7 +153,7 @@ void AccumulatePathContribution(const PathContribution pc, const double mScaling
     const int ix = int(pc.c[i].x), iy = int(pc.c[i].y);
     const Vec c = pc.c[i].c * mScaling;
     if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) continue;
-    img[ix + iy * pixelWidth] = img[ix + iy * pixelWidth] + c;
+    image[ix + iy * pixelWidth] = image[ix + iy * pixelWidth] + c;
   }
 }
 
@@ -205,12 +209,12 @@ void InitRandomNumbers() {
 }
 
 // local sampling PDFs and standard terms
-inline double GeometryTerm(const Vert e0, const Vert e1) {
+inline double GeometryTerm(const Vertex e0, const Vertex e1) {
   const Vec dv = e1.p - e0.p;
   const double d2 = dv.dot(dv);
   return fabs(e0.n.dot(dv) * e1.n.dot(dv)) / (d2 * d2);
 }
-inline double DirectionToArea(const Vert current, const Vert next) {
+inline double DirectionToArea(const Vertex current, const Vertex next) {
   const Vec dv = next.p - current.p;
   const double d2 = dv.dot(dv);
   return fabs(next.n.dot(dv)) / (d2 * sqrt(d2));
@@ -236,31 +240,31 @@ Vec PathThroughput(const Path Xb) {
   for (int i = 0; i < Xb.n; i++) {
     if (i == 0) {
       double W = 1.0 / double(pixelWidth * pixelHeight);
-      Vec d0 = Xb.x[1].p - Xb.x[0].p;
+      Vec d0 = Xb[1].p - Xb[0].p;
       const double dist2 = d0.dot(d0);
       d0 = d0 * (1.0 / sqrt(dist2));
       const double c = d0.dot(Camera.w);
       const double ds2 = (Camera.dist / c) * (Camera.dist / c);
       W = W / (c / ds2);
-      f = f * (W * fabs(d0.dot(Xb.x[1].n) / dist2));
+      f = f * (W * fabs(d0.dot(Xb[1].n) / dist2));
     } else if (i == (Xb.n - 1)) {
-      if (sph[Xb.x[i].id].refl == LGHT) {
-        const Vec d0 = (Xb.x[i - 1].p - Xb.x[i].p).norm();
-        const double L = LambertianBRDF(d0, Xb.x[i].n, d0);
-        f = f.mul(sph[Xb.x[i].id].color * L);
+      if (sph[Xb[i].id].refl == LGHT) {
+        const Vec d0 = (Xb[i - 1].p - Xb[i].p).norm();
+        const double L = LambertianBRDF(d0, Xb[i].n, d0);
+        f = f.mul(sph[Xb[i].id].color * L);
       } else {
         f = f * 0.0;
       }
     } else {
-      const Vec d0 = (Xb.x[i - 1].p - Xb.x[i].p).norm();
-      const Vec d1 = (Xb.x[i + 1].p - Xb.x[i].p).norm();
+      const Vec d0 = (Xb[i - 1].p - Xb[i].p).norm();
+      const Vec d1 = (Xb[i + 1].p - Xb[i].p).norm();
       double BRDF = 0.0;
-      if (sph[Xb.x[i].id].refl == DIFF) {
-        BRDF = LambertianBRDF(d0, Xb.x[i].n, d1);
-      } else if (sph[Xb.x[i].id].refl == GLOS) {
-        BRDF = GlossyBRDF(d0, Xb.x[i].n, d1);
+      if (sph[Xb[i].id].refl == DIFF) {
+        BRDF = LambertianBRDF(d0, Xb[i].n, d1);
+      } else if (sph[Xb[i].id].refl == GLOS) {
+        BRDF = GlossyBRDF(d0, Xb[i].n, d1);
       }
-      f = f.mul(sph[Xb.x[i].id].color * BRDF * GeometryTerm(Xb.x[i], Xb.x[i + 1]));
+      f = f.mul(sph[Xb[i].id].color * BRDF * GeometryTerm(Xb[i], Xb[i + 1]));
     }
     if (f.Max() == 0.0) return f;
   }
@@ -270,8 +274,8 @@ Vec PathThroughput(const Path Xb) {
 // check if the path can be connected or not (visibility term)
 bool isConnectable(const Path Xeye, const Path Xlight, double& px, double& py) {
   Vec Direction;
-  const Vert& Xeye_e = Xeye.x[Xeye.n - 1];
-  const Vert& Xlight_e = Xlight.x[Xlight.n - 1];
+  const Vertex& Xeye_e = Xeye[Xeye.n - 1];
+  const Vertex& Xlight_e = Xlight[Xlight.n - 1];
 
   bool Result;
   if ((Xeye.n == 0) && (Xlight.n >= 2)) {
@@ -280,10 +284,10 @@ bool isConnectable(const Path Xeye, const Path Xlight, double& px, double& py) {
   } else if ((Xeye.n >= 2) && (Xlight.n == 0)) {
     // direct hit to the light source
     Result = (sph[Xeye_e.id].refl == LGHT);
-    Direction = (Xeye.x[1].p - Xeye.x[0].p).norm();
+    Direction = (Xeye[1].p - Xeye[0].p).norm();
   } else if ((Xeye.n == 1) && (Xlight.n >= 1)) {
     // light tracing
-    Ray r(Xeye.x[0].p, (Xlight_e.p - Xeye.x[0].p).norm());
+    Ray r(Xeye[0].p, (Xlight_e.p - Xeye[0].p).norm());
     double t;
     int id;
     Result = (intersect(r, t, id)) && (id == Xlight_e.id);
@@ -294,7 +298,7 @@ bool isConnectable(const Path Xeye, const Path Xlight, double& px, double& py) {
     double t;
     int id;
     Result = (intersect(r, t, id)) && (id == Xlight_e.id);
-    Direction = (Xeye.x[1].p - Xeye.x[0].p).norm();
+    Direction = (Xeye[1].p - Xeye[0].p).norm();
   }
 
   // get the pixel location
@@ -335,24 +339,24 @@ double PathProbablityDensity(const Path SampledPath, const int PathLength, const
         p = p * 1.0;
       } else if (i == 0) {
         p = p * 1.0 / double(pixelWidth * pixelHeight);
-        Vec Direction0 = (SampledPath.x[1].p - SampledPath.x[0].p).norm();
+        Vec Direction0 = (SampledPath[1].p - SampledPath[0].p).norm();
         double CosTheta = Direction0.dot(Camera.w);
         double DistanceToScreen2 = Camera.dist / CosTheta;
         DistanceToScreen2 = DistanceToScreen2 * DistanceToScreen2;
         p = p / (CosTheta / DistanceToScreen2);
 
-        p = p * DirectionToArea(SampledPath.x[0], SampledPath.x[1]);
+        p = p * DirectionToArea(SampledPath[0], SampledPath[1]);
       } else {
         // PDF of sampling ith vertex
-        Vec Direction0 = (SampledPath.x[i - 1].p - SampledPath.x[i].p).norm();
-        Vec Direction1 = (SampledPath.x[i + 1].p - SampledPath.x[i].p).norm();
+        Vec Direction0 = (SampledPath[i - 1].p - SampledPath[i].p).norm();
+        Vec Direction1 = (SampledPath[i + 1].p - SampledPath[i].p).norm();
 
-        if (sph[SampledPath.x[i].id].refl == DIFF) {
-          p = p * LambertianPDF(Direction0, SampledPath.x[i].n, Direction1);
-        } else if (sph[SampledPath.x[i].id].refl == GLOS) {
-          p = p * GlossyPDF(Direction0, SampledPath.x[i].n, Direction1);
+        if (sph[SampledPath[i].id].refl == DIFF) {
+          p = p * LambertianPDF(Direction0, SampledPath[i].n, Direction1);
+        } else if (sph[SampledPath[i].id].refl == GLOS) {
+          p = p * GlossyPDF(Direction0, SampledPath[i].n, Direction1);
         }
-        p = p * DirectionToArea(SampledPath.x[i], SampledPath.x[i + 1]);
+        p = p * DirectionToArea(SampledPath[i], SampledPath[i + 1]);
       }
     }
 
@@ -363,20 +367,20 @@ double PathProbablityDensity(const Path SampledPath, const int PathLength, const
           // PDF of sampling the light position (assume area-based sampling)
           p = p * (1.0 / light_area);
         } else if (i == 0) {
-          Vec Direction0 = (SampledPath.x[PathLength - 1].p - SampledPath.x[PathLength].p).norm();
-          p = p * LambertianPDF(SampledPath.x[PathLength].n, SampledPath.x[PathLength].n, Direction0);
-          p = p * DirectionToArea(SampledPath.x[PathLength], SampledPath.x[PathLength - 1]);
+          Vec Direction0 = (SampledPath[PathLength - 1].p - SampledPath[PathLength].p).norm();
+          p = p * LambertianPDF(SampledPath[PathLength].n, SampledPath[PathLength].n, Direction0);
+          p = p * DirectionToArea(SampledPath[PathLength], SampledPath[PathLength - 1]);
         } else {
           // PDF of sampling (PathLength - i)th vertex
-          Vec Direction0 = (SampledPath.x[PathLength - (i - 1)].p - SampledPath.x[PathLength - i].p).norm();
-          Vec Direction1 = (SampledPath.x[PathLength - (i + 1)].p - SampledPath.x[PathLength - i].p).norm();
+          Vec Direction0 = (SampledPath[PathLength - (i - 1)].p - SampledPath[PathLength - i].p).norm();
+          Vec Direction1 = (SampledPath[PathLength - (i + 1)].p - SampledPath[PathLength - i].p).norm();
 
-          if (sph[SampledPath.x[PathLength - i].id].refl == DIFF) {
-            p = p * LambertianPDF(Direction0, SampledPath.x[PathLength - i].n, Direction1);
-          } else if (sph[SampledPath.x[PathLength - i].id].refl == GLOS) {
-            p = p * GlossyPDF(Direction0, SampledPath.x[PathLength - i].n, Direction1);
+          if (sph[SampledPath[PathLength - i].id].refl == DIFF) {
+            p = p * LambertianPDF(Direction0, SampledPath[PathLength - i].n, Direction1);
+          } else if (sph[SampledPath[PathLength - i].id].refl == GLOS) {
+            p = p * GlossyPDF(Direction0, SampledPath[PathLength - i].n, Direction1);
           }
-          p = p * DirectionToArea(SampledPath.x[PathLength - i], SampledPath.x[PathLength - (i + 1)]);
+          p = p * DirectionToArea(SampledPath[PathLength - i], SampledPath[PathLength - (i + 1)]);
         }
       }
     }
@@ -401,7 +405,7 @@ void TracePath(Path& path, const Ray r, const int RayLevel, const int MaxRayLeve
   n = n.dot(r.d) < 0 ? n : n * -1;
 
   // set path data
-  path.x[path.n] = Vert(p, n, id);
+  path[path.n] = Vertex(p, n, id);
   path.n++;
   const double rnd0 = prnds[(RayLevel - 1) * numRNGsPerEvent + 0 + PathRndsOffset];
   const double rnd1 = prnds[(RayLevel - 1) * numRNGsPerEvent + 1 + PathRndsOffset];
@@ -426,7 +430,7 @@ Path GenerateLightPath(const int MaxLightEvents) {
   Result.n = 0;
 
   if (MaxLightEvents == 0) return Result;
-  for (int i = 0; i < maxEvents; i++) Result.x[i].id = -1;
+  for (int i = 0; i < maxEvents; i++) Result[i].id = -1;
   PathRndsOffset = numStatesSubpath;
 
   Ray r = SampleLightSources(prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
@@ -436,7 +440,7 @@ Path GenerateLightPath(const int MaxLightEvents) {
   r.d = VecCosine(n, 1.0, prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
   PathRndsOffset += numRNGsPerEvent;
 
-  Result.x[0] = Vert(r.o, n, light_id);
+  Result[0] = Vertex(r.o, n, light_id);
   Result.n++;
   TracePath(Result, r, 1, MaxLightEvents);
   return Result;
@@ -453,13 +457,13 @@ Path GenerateEyePath(const int MaxEyeEvents) {
   Result.n = 0;
 
   if (MaxEyeEvents == 0) return Result;
-  for (int i = 0; i < maxEvents; i++) Result.x[i].id = -1;
+  for (int i = 0; i < maxEvents; i++) Result[i].id = -1;
   PathRndsOffset = 0;
 
   Ray r = SampleCamera(prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
   PathRndsOffset += numRNGsPerEvent;
 
-  Result.x[0] = Vert(r.o, Camera.w, camera_id);
+  Result[0] = Vertex(r.o, Camera.w, camera_id);
   Result.n++;
   TracePath(Result, r, 1, MaxEyeEvents);
   return Result;
@@ -510,8 +514,8 @@ PathContribution CombinePaths(const Path EyePath, const Path LightPath, const in
 
       // construct a full path
       Path SampledPath;
-      for (int i = 0; i < NumEyeVertices; i++) SampledPath.x[i] = EyePath.x[i];
-      for (int i = 0; i < NumLightVertices; i++) SampledPath.x[PathLength - i] = LightPath.x[i];
+      for (int i = 0; i < NumEyeVertices; i++) SampledPath[i] = EyePath[i];
+      for (int i = 0; i < NumLightVertices; i++) SampledPath[PathLength - i] = LightPath[i];
       SampledPath.n = NumEyeVertices + NumLightVertices;
 
       // evaluate the path
@@ -540,8 +544,8 @@ PathContribution CombinePaths(const Path EyePath, const Path LightPath, const in
 
 // main rendering process
 int main(int argc, char* argv[]) {
-  unsigned long samps = 0;
-  const int ltime = (argc == 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
+  unsigned long samples = 0;
+  const int ltime = (argc >= 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
   std::cout << ltime << std::endl;
   static const char* progr = "|*-/";
   FILE* f;
@@ -569,9 +573,9 @@ int main(int argc, char* argv[]) {
 
   // integration
   for (;;) {
-    samps++;
-    fprintf(stderr, "\rPSSMLT %c", progr[(samps >> 8) & 3]);
-    if (samps % pixelWidth) {
+    samples++;
+    fprintf(stderr, "\rPSSMLT %c", progr[(samples >> 8) & 3]);
+    if (samples % pixelWidth) {
       gettimeofday(&currentTime, NULL);
       if (ltime < ((currentTime.tv_sec - startTime.tv_sec) + (currentTime.tv_usec - startTime.tv_usec) * 1.0E-6)) break;
     }
@@ -601,13 +605,22 @@ int main(int argc, char* argv[]) {
   }
 
   // write out .ppm
-  f = fopen("image_pssmlt.ppm", "wb");
-  fprintf(f, "P6\n%d %d\n%d\n", pixelWidth, pixelHeight, 255);
-  double s = double(pixelWidth * pixelHeight) / double(samps);
+  std::string fileName;
+  if (argc > 2)
+    fileName = std::string(argv[2]) + ".ppm";
+  else
+    fileName = "output.ppm";
+
+  std::ofstream outputFile(fileName, std::ios::binary);
+
+  outputFile << "P6" << std::endl;
+  outputFile << pixelWidth << "	" << pixelHeight << std::endl;
+  outputFile << "255" << std::endl;
+
+ //	Divide the color total by the number of samples.
+  double s = double(pixelWidth * pixelHeight) / double(samples);
   for (int i = 0; i < pixelWidth * pixelHeight; i++) {
-    unsigned char c[3] = {static_cast<unsigned char>(toInt(img[i].x * s)),
-                          static_cast<unsigned char>(toInt(img[i].y * s)),
-                          static_cast<unsigned char>(toInt(img[i].z * s))};
-    fwrite(&c[0], 3, 1, f);
+    outputFile << static_cast<unsigned char>(toInt(image[i].x * s)) << static_cast<unsigned char>(toInt(image[i].y * s))
+               << static_cast<unsigned char>(toInt(image[i].z * s));
   }
 }

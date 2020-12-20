@@ -14,9 +14,10 @@ struct Sphere {
       position(position),
       color(color),
       refl(re_) {}
-  inline double intersect(const Ray& ray) const {  // returns distance
-    Vec op = position - ray.o;
-    double t, b = op.dot(ray.d), det = b * b - op.dot(op) + radius * radius;
+  
+	inline double intersect(const Ray& ray) const {  // returns distance
+    Vec op = position - ray.origin;
+    double t, b = op.dot(ray.direction), det = b * b - op.dot(op) + radius * radius;
     if (det < 0)
       return 1e20;
     else

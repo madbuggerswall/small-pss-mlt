@@ -37,9 +37,9 @@ struct Vec {
 
 // ray-sphere intersection (extended from smallpt)
 struct Ray {
-  Vec o, d;
+  Vec origin, direction;
   Ray(){};
-  Ray(Vec o_, Vec d_) : o(o_), d(d_) {}
+  Ray(const Vec& origin, const Vec& direction) : origin(origin), direction(direction) {}
 };
 
 #endif

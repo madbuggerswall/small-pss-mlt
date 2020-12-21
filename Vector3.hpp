@@ -9,15 +9,17 @@ struct Vec {
   Vec(double x = 0, double y = 0, double z = 0) : x(x), y(y), z(z) {}
 
   inline Vec operator-() const { return Vec(-x, -y, -z); }
-  inline Vec operator+(const Vec& b) const { return Vec(x + b.x, y + b.y, z + b.z); }
-  inline Vec operator-(const Vec& b) const { return Vec(x - b.x, y - b.y, z - b.z); }
-  inline Vec operator+(double b) const { return Vec(x + b, y + b, z + b); }
-  inline Vec operator-(double b) const { return Vec(x - b, y - b, z - b); }
-  inline Vec operator*(double b) const { return Vec(x * b, y * b, z * b); }
-  inline Vec mul(const Vec& b) const { return Vec(x * b.x, y * b.y, z * b.z); }
+  inline Vec operator+(const Vec& rhs) const { return Vec(x + rhs.x, y + rhs.y, z + rhs.z); }
+  inline Vec operator-(const Vec& rhs) const { return Vec(x - rhs.x, y - rhs.y, z - rhs.z); }
+  inline Vec operator+(double rhs) const { return Vec(x + rhs, y + rhs, z + rhs); }
+  inline Vec operator-(double rhs) const { return Vec(x - rhs, y - rhs, z - rhs); }
+  inline Vec operator*(double rhs) const { return Vec(x * rhs, y * rhs, z * rhs); }
+  inline Vec mul(const Vec& rhs) const { return Vec(x * rhs.x, y * rhs.y, z * rhs.z); }
   inline Vec norm() { return (*this) * (1.0 / sqrt(x * x + y * y + z * z)); }
-  inline double dot(const Vec& b) const { return x * b.x + y * b.y + z * b.z; }
-  Vec operator%(const Vec& b) const { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
+  inline double dot(const Vec& rhs) const { return x * rhs.x + y * rhs.y + z * rhs.z; }
+  Vec operator%(const Vec& rhs) const {
+    return Vec(y * rhs.z - z * rhs.y, z * rhs.x - x * rhs.z, x * rhs.y - y * rhs.x);
+  }
   inline Vec reflect(const Vec& n) const { return (*this) - n * 2.0 * n.dot((*this)); }
   inline double Max() const { return std::fmax(std::fmax(x, y), z); }
   inline Vec onb(const Vec& n) const {

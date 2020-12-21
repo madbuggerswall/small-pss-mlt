@@ -1,4 +1,4 @@
-#include <math.h>    // smallpssmlt, primary sample space MLT by Toshiya Hachisuka
+// smallpssmlt, primary sample space MLT by Toshiya Hachisuka
 #include <stdio.h>   // Usage: ./smallpssmlt time_sec
 #include <stdlib.h>  // derived from smallpt, a path tracer by Kevin Beason, 2008
 
@@ -47,7 +47,7 @@ Vec VecRandom(const double rnd1, const double rnd2) {
 }
 Vec VecCosine(const Vec& n, const double g, const double rnd1, const double rnd2) {
   const double temp1 = 2.0 * PI * rnd1, temp2 = pow(rnd2, 1.0 / (g + 1.0));
-  const double s = sin(temp1), c = cos(temp1), t = sqrt(1.0 - temp2 * temp2);
+  const double s = std::sin(temp1), c = std::cos(temp1), t = std::sqrt(1.0 - temp2 * temp2);
   return Vec(s * t, temp2, c * t).onb(n);
 }
 
@@ -68,12 +68,12 @@ const double light_area = (4.0 * PI * sph[light_id].radius * sph[light_id].radiu
 
 bool intersect(const Ray& ray, double& t, int& id) {  // ray-sphere intrsect.
   int n = sizeof(sph) / sizeof(Sphere);
-  double d, inf = 1e20;
+  double distance, inf = 1e20;
   t = inf;
   for (int i = 0; i < n; i++) {
-    d = sph[i].intersect(ray);
-    if (d < t) {
-      t = d;
+    distance = sph[i].intersect(ray);
+    if (distance < t) {
+      t = distance;
       id = i;
     }
   }
@@ -154,6 +154,7 @@ struct PathContribution {
     sc = 0.0;
   }
 };
+
 void AccumulatePathContribution(const PathContribution& pc, const double mScaling) {
   if (pc.sc == 0) return;
   for (int i = 0; i < pc.n; i++) {
@@ -309,10 +310,10 @@ bool isConnectable(const Path& Xeye, const Path& Xlight, double& px, double& py)
   }
 
   // get the pixel location
-  Vec ScreenCenter = camera.origin + (camera.w * camera.dist);
-  Vec ScreenPosition = camera.origin + (direction * (camera.dist / direction.dot(camera.w))) - ScreenCenter;
-  px = camera.u.dot(ScreenPosition) + (pixelWidth * 0.5);
-  py = -camera.v.dot(ScreenPosition) + (pixelHeight * 0.5);
+  Vec screenCenter = camera.origin + (camera.w * camera.dist);
+  Vec screenPosition = camera.origin + (direction * (camera.dist / direction.dot(camera.w))) - screenCenter;
+  px = camera.u.dot(screenPosition) + (pixelWidth * 0.5);
+  py = -camera.v.dot(screenPosition) + (pixelHeight * 0.5);
   return result && ((px >= 0) && (px < pixelWidth) && (py >= 0) && (py < pixelHeight));
 }
 
@@ -321,25 +322,25 @@ bool isConnectable(const Path& Xeye, const Path& Xlight, double& px, double& py)
 double PathProbablityDensity(const Path& sampledPath, const int pathLength, const int specifiedNumEyeVertices = -1,
                              const int specifiedNumLightVertices = -1) {
   KahanAdder SumPDFs(0.0);
-  bool Specified = (specifiedNumEyeVertices != -1) && (specifiedNumLightVertices != -1);
+  bool specified = (specifiedNumEyeVertices != -1) && (specifiedNumLightVertices != -1);
 
   // number of eye subpath vertices
-  for (int NumEyeVertices = 0; NumEyeVertices <= pathLength + 1; NumEyeVertices++) {
+  for (int numEyeVertices = 0; numEyeVertices <= pathLength + 1; numEyeVertices++) {
     // extended BPT
     double p = 1.0;
 
     // number of light subpath vertices
-    int NumLightVertices = (pathLength + 1) - NumEyeVertices;
+    int numLightVertices = (pathLength + 1) - numEyeVertices;
 
     // we have pinhole camera
-    if (NumEyeVertices == 0) continue;
+    if (numEyeVertices == 0) continue;
 
     // add all?
-    if (Specified && ((NumEyeVertices != specifiedNumEyeVertices) || (NumLightVertices != specifiedNumLightVertices)))
+    if (specified && ((numEyeVertices != specifiedNumEyeVertices) || (numLightVertices != specifiedNumLightVertices)))
       continue;
 
     // sampling from the eye
-    for (int i = -1; i <= NumEyeVertices - 2; i++) {
+    for (int i = -1; i <= numEyeVertices - 2; i++) {
       if (i == -1) {
         // PDF of sampling the camera position (the same delta function with the scaling 1.0 for all the PDFs - they
         // cancel out)
@@ -369,7 +370,7 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
 
     if (p != 0.0) {
       // sampling from the light source
-      for (int i = -1; i <= NumLightVertices - 2; i++) {
+      for (int i = -1; i <= numLightVertices - 2; i++) {
         if (i == -1) {
           // PDF of sampling the light position (assume area-based sampling)
           p = p * (1.0 / light_area);
@@ -392,7 +393,7 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
       }
     }
 
-    if (Specified && (NumEyeVertices == specifiedNumEyeVertices) && (NumLightVertices == specifiedNumLightVertices))
+    if (specified && (numEyeVertices == specifiedNumEyeVertices) && (numLightVertices == specifiedNumLightVertices))
       return p;
 
     // sum the probability density (use Kahan summation algorithm to reduce numerical issues)
@@ -430,8 +431,8 @@ void TracePath(Path& path, const Ray& ray, const int rayLevel, const int maxRayL
 }
 
 Ray SampleLightSources(const double rnd1, const double rnd2) {
-  const Vec d = VecRandom(rnd1, rnd2);
-  return Ray(sph[light_id].position + (d * sph[light_id].radius), d);
+  const Vec direction = VecRandom(rnd1, rnd2);
+  return Ray(sph[light_id].position + (direction * sph[light_id].radius), direction);
 }
 Path GenerateLightPath(const int maxLightEvents) {
   Path lightPath;
@@ -495,26 +496,26 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
   PathContribution result;
   result.n = 0;
   result.sc = 0.0;
-  const bool Specified = (specifiedNumEyeVertices != -1) && (specifiedNumLightVertices != -1);
+  const bool specified = (specifiedNumEyeVertices != -1) && (specifiedNumLightVertices != -1);
 
   // maxEvents = the maximum number of vertices
   for (int pathLength = minPathLength; pathLength <= maxPathLength; pathLength++) {
-    for (int NumEyeVertices = 0; NumEyeVertices <= pathLength + 1; NumEyeVertices++) {
-      const int NumLightVertices = (pathLength + 1) - NumEyeVertices;
+    for (int numEyeVertices = 0; numEyeVertices <= pathLength + 1; numEyeVertices++) {
+      const int numLightVertices = (pathLength + 1) - numEyeVertices;
 
-      if (NumEyeVertices == 0) continue;  // no direct hit to the film (pinhole)
-      if (NumEyeVertices > eyePath.vertexCount) continue;
-      if (NumLightVertices > lightPath.vertexCount) continue;
+      if (numEyeVertices == 0) continue;  // no direct hit to the film (pinhole)
+      if (numEyeVertices > eyePath.vertexCount) continue;
+      if (numLightVertices > lightPath.vertexCount) continue;
 
       // take only the specified technique if provided
-      if (Specified && ((specifiedNumEyeVertices != NumEyeVertices) || (specifiedNumLightVertices != NumLightVertices)))
+      if (specified && ((specifiedNumEyeVertices != numEyeVertices) || (specifiedNumLightVertices != numLightVertices)))
         continue;
 
       // extract subpaths
       Path Eyesubpath = eyePath;
       Path Lightsubpath = lightPath;
-      Eyesubpath.vertexCount = NumEyeVertices;
-      Lightsubpath.vertexCount = NumLightVertices;
+      Eyesubpath.vertexCount = numEyeVertices;
+      Lightsubpath.vertexCount = numLightVertices;
 
       // check the path visibility
       double px = -1.0, py = -1.0;
@@ -522,14 +523,14 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
 
       // construct a full path
       Path sampledPath;
-      for (int i = 0; i < NumEyeVertices; i++) sampledPath[i] = eyePath[i];
-      for (int i = 0; i < NumLightVertices; i++) sampledPath[pathLength - i] = lightPath[i];
-      sampledPath.vertexCount = NumEyeVertices + NumLightVertices;
+      for (int i = 0; i < numEyeVertices; i++) sampledPath[i] = eyePath[i];
+      for (int i = 0; i < numLightVertices; i++) sampledPath[pathLength - i] = lightPath[i];
+      sampledPath.vertexCount = numEyeVertices + numLightVertices;
 
       // evaluate the path
       Vec f = PathThroughput(sampledPath);
-      double p = PathProbablityDensity(sampledPath, pathLength, NumEyeVertices, NumLightVertices);
-      double w = MISWeight(sampledPath, NumEyeVertices, NumLightVertices, pathLength);
+      double p = PathProbablityDensity(sampledPath, pathLength, numEyeVertices, numLightVertices);
+      double w = MISWeight(sampledPath, numEyeVertices, numLightVertices, pathLength);
       if ((w <= 0.0) || (p <= 0.0)) continue;
 
       Vec c = f * (w / p);
@@ -543,7 +544,7 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
       result.sc = std::fmax(c.Max(), result.sc);
 
       // return immediately if the technique is specified
-      if (Specified && (specifiedNumEyeVertices == NumEyeVertices) && (specifiedNumLightVertices == NumLightVertices))
+      if (specified && (specifiedNumEyeVertices == numEyeVertices) && (specifiedNumLightVertices == numLightVertices))
         return result;
     }
   }

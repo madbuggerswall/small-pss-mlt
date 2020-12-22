@@ -33,16 +33,16 @@ const int numStatesSubpath = (maxEvents + 2) * numRNGsPerEvent;
 const int numStates = numStatesSubpath * 2;
 
 // Scene: radius, position, color, material
-Sphere sph[] = {Sphere(6.0, Vec(10, 70, 51.6), Color(100., 100., 100.), LGHT),
-                Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Color(0.75, 0.25, 0.25), GLOS),
-                Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Color(0.25, 0.25, 0.75), GLOS),
-                Sphere(1e5, Vec(50, 40.8, 1e5), Color(0.75, 0.65, 0.75), DIFF),
-                Sphere(1e5, Vec(50, 40.8, -1e5 + 350), Color(0.50, 0.50, 0.50), DIFF),
-                Sphere(1e5, Vec(50, 1e5, 81.6), Color(0.65, 0.75, 0.75), GLOS),
-                Sphere(1e5, Vec(50, -1e5 + 81.6, 81.6), Color(0.75, 0.75, 0.65), GLOS),
-                Sphere(20, Vec(50, 20, 50), Color(0.25, 0.75, 0.25), DIFF),
-                Sphere(16.5, Vec(19, 16.5, 25), Color(0.99, 0.99, 0.99), GLOS),
-                Sphere(16.5, Vec(77, 16.5, 78), Color(0.99, 0.99, 0.99), GLOS)};
+Sphere sph[] = {Sphere(6.0, Vector3(10, 70, 51.6), Color(100., 100., 100.), LGHT),
+                Sphere(1e5, Vector3(1e5 + 1, 40.8, 81.6), Color(0.75, 0.25, 0.25), GLOS),
+                Sphere(1e5, Vector3(-1e5 + 99, 40.8, 81.6), Color(0.25, 0.25, 0.75), GLOS),
+                Sphere(1e5, Vector3(50, 40.8, 1e5), Color(0.75, 0.65, 0.75), DIFF),
+                Sphere(1e5, Vector3(50, 40.8, -1e5 + 350), Color(0.50, 0.50, 0.50), DIFF),
+                Sphere(1e5, Vector3(50, 1e5, 81.6), Color(0.65, 0.75, 0.75), GLOS),
+                Sphere(1e5, Vector3(50, -1e5 + 81.6, 81.6), Color(0.75, 0.75, 0.65), GLOS),
+                Sphere(20, Vector3(50, 20, 50), Color(0.25, 0.75, 0.25), DIFF),
+                Sphere(16.5, Vector3(19, 16.5, 25), Color(0.99, 0.99, 0.99), GLOS),
+                Sphere(16.5, Vector3(77, 16.5, 78), Color(0.99, 0.99, 0.99), GLOS)};
 
 // xorshift PRNG
 double rnd(void) {
@@ -54,15 +54,15 @@ double rnd(void) {
   return (w = (w ^ (w >> 19)) ^ (t ^ (t >> 8))) * (1.0 / 4294967296.0);
 }
 
-Vec VecRandom(const double rnd1, const double rnd2) {
+Vector3 VecRandom(const double rnd1, const double rnd2) {
   const double temp1 = 2.0 * PI * rnd1, temp2 = 2.0 * rnd2 - 1.0;
   const double s = sin(temp1), c = cos(temp1), t = sqrt(1.0 - temp2 * temp2);
-  return Vec(s * t, temp2, c * t);
+  return Vector3(s * t, temp2, c * t);
 }
-Vec VecCosine(const Vec& n, const double g, const double rnd1, const double rnd2) {
+Vector3 VecCosine(const Vector3& n, const double g, const double rnd1, const double rnd2) {
   const double temp1 = 2.0 * PI * rnd1, temp2 = pow(rnd2, 1.0 / (g + 1.0));
   const double s = std::sin(temp1), c = std::cos(temp1), t = std::sqrt(1.0 - temp2 * temp2);
-  return Vec(s * t, temp2, c * t).onb(n);
+  return Vector3(s * t, temp2, c * t).onb(n);
 }
 
 const int light_id = 0;
@@ -100,20 +100,20 @@ struct KahanAdder {
 
 // pinhole camera
 struct Camera {
-  Vec origin, u, v, w;
+  Vector3 origin, u, v, w;
   double dist;
   Camera() = default;
-  Camera(const Vec& origin, const Vec& lookAt, const double fov) : origin(origin) {
+  Camera(const Vector3& origin, const Vector3& lookAt, const double fov) : origin(origin) {
     dist = pixelHeight / (2.0 * tan((fov / 2.0) * (PI / 180.0)));
     w = (lookAt - origin).norm();
-    u = (w % Vec(0.0, 1.0, 0.0)).norm();
+    u = (w % Vector3(0.0, 1.0, 0.0)).norm();
     v = u % w;
   }
-  void set(const Vec& origin, const Vec& lookAt, const double fov) {
+  void set(const Vector3& origin, const Vector3& lookAt, const double fov) {
     this->origin = origin;
     dist = pixelHeight / (2.0 * tan((fov / 2.0) * (PI / 180.0)));
     w = (lookAt - origin).norm();
-    u = (w % Vec(0.0, 1.0, 0.0)).norm();
+    u = (w % Vector3(0.0, 1.0, 0.0)).norm();
     v = u % w;
   }
 };
@@ -128,10 +128,10 @@ int toInt(double x) { return int(pow(1 - exp(-x), 1 / 2.2) * 255 + .5); }
 
 // path data
 struct Vertex {
-  Vec point, normal;
+  Vector3 point, normal;
   int id;
   Vertex(){};
-  Vertex(const Vec& point, const Vec& normal, int id) : point(point), normal(normal), id(id) {}
+  Vertex(const Vector3& point, const Vector3& normal, int id) : point(point), normal(normal), id(id) {}
 };
 
 struct Path {
@@ -226,29 +226,31 @@ void InitRandomNumbers() {
 
 // local sampling PDFs and standard terms
 inline double GeometryTerm(const Vertex e0, const Vertex e1) {
-  const Vec dv = e1.point - e0.point;
+  const Vector3 dv = e1.point - e0.point;
   const double d2 = dv.dot(dv);
   return fabs(e0.normal.dot(dv) * e1.normal.dot(dv)) / (d2 * d2);
 }
 inline double DirectionToArea(const Vertex current, const Vertex next) {
-  const Vec dv = next.point - current.point;
+  const Vector3 dv = next.point - current.point;
   const double d2 = dv.dot(dv);
   return fabs(next.normal.dot(dv)) / (d2 * sqrt(d2));
 }
 
-inline double GlossyBRDF(const Vec& wi, const Vec& n, const Vec& wo) {
+inline double GlossyBRDF(const Vector3& wi, const Vector3& n, const Vector3& wo) {
   const double won = wo.dot(n);
   const double win = wi.dot(n);
-  const Vec r = (-wi).reflect(n);
+  const Vector3 r = (-wi).reflect(n);
   return (glossiness + 2.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), glossiness) / std::fmax(fabs(win), fabs(won));
 }
-inline double GlossyPDF(const Vec& wi, const Vec& n, const Vec& wo) {
-  const Vec r = (-wi).reflect(n);
+inline double GlossyPDF(const Vector3& wi, const Vector3& n, const Vector3& wo) {
+  const Vector3 r = (-wi).reflect(n);
   return (glossiness + 1.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), glossiness);
 }
 
-inline double LambertianBRDF(const Vec& wi, const Vec& normal, const Vec& wo) { return 1.0 / PI; }
-inline double LambertianPDF(const Vec& wi, const Vec& normal, const Vec& wo) { return fabs(wo.dot(normal)) / PI; }
+inline double LambertianBRDF(const Vector3& wi, const Vector3& normal, const Vector3& wo) { return 1.0 / PI; }
+inline double LambertianPDF(const Vector3& wi, const Vector3& normal, const Vector3& wo) {
+  return fabs(wo.dot(normal)) / PI;
+}
 
 // measurement contribution function
 Color PathThroughput(const Path& Xb) {
@@ -256,7 +258,7 @@ Color PathThroughput(const Path& Xb) {
   for (int i = 0; i < Xb.vertexCount; i++) {
     if (i == 0) {
       double W = 1.0 / double(pixelWidth * pixelHeight);
-      Vec d0 = Xb[1].point - Xb[0].point;
+      Vector3 d0 = Xb[1].point - Xb[0].point;
       const double dist2 = d0.dot(d0);
       d0 = d0 * (1.0 / sqrt(dist2));
       const double c = d0.dot(camera.w);
@@ -265,15 +267,15 @@ Color PathThroughput(const Path& Xb) {
       color = color * (W * fabs(d0.dot(Xb[1].normal) / dist2));
     } else if (i == (Xb.vertexCount - 1)) {
       if (sph[Xb[i].id].refl == LGHT) {
-        const Vec d0 = (Xb[i - 1].point - Xb[i].point).norm();
+        const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).norm();
         const double L = LambertianBRDF(d0, Xb[i].normal, d0);
         color *= sph[Xb[i].id].color * L;
       } else {
         color *= 0.0;
       }
     } else {
-      const Vec d0 = (Xb[i - 1].point - Xb[i].point).norm();
-      const Vec d1 = (Xb[i + 1].point - Xb[i].point).norm();
+      const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).norm();
+      const Vector3 d1 = (Xb[i + 1].point - Xb[i].point).norm();
       double BRDF = 0.0;
       if (sph[Xb[i].id].refl == DIFF) {
         BRDF = LambertianBRDF(d0, Xb[i].normal, d1);
@@ -289,7 +291,7 @@ Color PathThroughput(const Path& Xb) {
 
 // check if the path can be connected or not (visibility term)
 bool isConnectable(const Path& Xeye, const Path& Xlight, double& px, double& py) {
-  Vec direction;
+  Vector3 direction;
   const Vertex& Xeye_e = Xeye[Xeye.vertexCount - 1];
   const Vertex& Xlight_e = Xlight[Xlight.vertexCount - 1];
 
@@ -318,8 +320,8 @@ bool isConnectable(const Path& Xeye, const Path& Xlight, double& px, double& py)
   }
 
   // get the pixel location
-  Vec screenCenter = camera.origin + (camera.w * camera.dist);
-  Vec screenPosition = camera.origin + (direction * (camera.dist / direction.dot(camera.w))) - screenCenter;
+  Vector3 screenCenter = camera.origin + (camera.w * camera.dist);
+  Vector3 screenPosition = camera.origin + (direction * (camera.dist / direction.dot(camera.w))) - screenCenter;
   px = camera.u.dot(screenPosition) + (pixelWidth * 0.5);
   py = -camera.v.dot(screenPosition) + (pixelHeight * 0.5);
   return result && ((px >= 0) && (px < pixelWidth) && (py >= 0) && (py < pixelHeight));
@@ -355,7 +357,7 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
         pdfValue *= 1.0;
       } else if (i == 0) {
         pdfValue *= 1.0 / double(pixelWidth * pixelHeight);
-        Vec Direction0 = (sampledPath[1].point - sampledPath[0].point).norm();
+        Vector3 Direction0 = (sampledPath[1].point - sampledPath[0].point).norm();
         double CosTheta = Direction0.dot(camera.w);
         double DistanceToScreen2 = camera.dist / CosTheta;
         DistanceToScreen2 = DistanceToScreen2 * DistanceToScreen2;
@@ -364,8 +366,8 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
         pdfValue *= DirectionToArea(sampledPath[0], sampledPath[1]);
       } else {
         // PDF of sampling ith vertex
-        Vec Direction0 = (sampledPath[i - 1].point - sampledPath[i].point).norm();
-        Vec Direction1 = (sampledPath[i + 1].point - sampledPath[i].point).norm();
+        Vector3 Direction0 = (sampledPath[i - 1].point - sampledPath[i].point).norm();
+        Vector3 Direction1 = (sampledPath[i + 1].point - sampledPath[i].point).norm();
 
         if (sph[sampledPath[i].id].refl == DIFF) {
           pdfValue *= LambertianPDF(Direction0, sampledPath[i].normal, Direction1);
@@ -383,13 +385,13 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
           // PDF of sampling the light position (assume area-based sampling)
           pdfValue *= (1.0 / light_area);
         } else if (i == 0) {
-          Vec Direction0 = (sampledPath[pathLength - 1].point - sampledPath[pathLength].point).norm();
+          Vector3 Direction0 = (sampledPath[pathLength - 1].point - sampledPath[pathLength].point).norm();
           pdfValue *= LambertianPDF(sampledPath[pathLength].normal, sampledPath[pathLength].normal, Direction0);
           pdfValue *= DirectionToArea(sampledPath[pathLength], sampledPath[pathLength - 1]);
         } else {
           // PDF of sampling (PathLength - i)th vertex
-          Vec Direction0 = (sampledPath[pathLength - (i - 1)].point - sampledPath[pathLength - i].point).norm();
-          Vec Direction1 = (sampledPath[pathLength - (i + 1)].point - sampledPath[pathLength - i].point).norm();
+          Vector3 Direction0 = (sampledPath[pathLength - (i - 1)].point - sampledPath[pathLength - i].point).norm();
+          Vector3 Direction1 = (sampledPath[pathLength - (i + 1)].point - sampledPath[pathLength - i].point).norm();
 
           if (sph[sampledPath[pathLength - i].id].refl == DIFF) {
             pdfValue *= LambertianPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
@@ -417,8 +419,8 @@ void TracePath(Path& path, const Ray& ray, const int rayLevel, const int maxRayL
   int id;
   if (!intersect(ray, t, id)) return;
   const Sphere& obj = sph[id];
-  Vec intersectionPoint = ray.origin + ray.direction * t;
-  Vec normal = (intersectionPoint - obj.position).norm();
+  Vector3 intersectionPoint = ray.origin + ray.direction * t;
+  Vector3 normal = (intersectionPoint - obj.position).norm();
   normal = normal.dot(ray.direction) < 0 ? normal : normal * -1;
 
   // set path data
@@ -439,7 +441,7 @@ void TracePath(Path& path, const Ray& ray, const int rayLevel, const int maxRayL
 }
 
 Ray SampleLightSources(const double rnd1, const double rnd2) {
-  const Vec direction = VecRandom(rnd1, rnd2);
+  const Vector3 direction = VecRandom(rnd1, rnd2);
   return Ray(sph[light_id].position + (direction * sph[light_id].radius), direction);
 }
 Path GenerateLightPath(const int maxLightEvents) {
@@ -451,7 +453,7 @@ Path GenerateLightPath(const int maxLightEvents) {
   PathRndsOffset = numStatesSubpath;
 
   Ray ray = SampleLightSources(prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
-  const Vec n = ray.direction;
+  const Vector3 n = ray.direction;
   PathRndsOffset += numRNGsPerEvent;
 
   ray.direction = VecCosine(n, 1.0, prnds[PathRndsOffset + 0], prnds[PathRndsOffset + 1]);
@@ -464,9 +466,9 @@ Path GenerateLightPath(const int maxLightEvents) {
 }
 
 Ray SampleCamera(const double rnd1, const double rnd2) {
-  const Vec su = camera.u * -(0.5 - rnd1) * pixelWidth;
-  const Vec sv = camera.v * (0.5 - rnd2) * pixelHeight;
-  const Vec sw = camera.w * camera.dist;
+  const Vector3 su = camera.u * -(0.5 - rnd1) * pixelWidth;
+  const Vector3 sv = camera.v * (0.5 - rnd2) * pixelHeight;
+  const Vector3 sw = camera.w * camera.dist;
   return Ray(camera.origin, (su + sv + sw).norm());
 }
 Path GenerateEyePath(const int maxEyeEvents) {
@@ -565,7 +567,7 @@ int main(int argc, char* argv[]) {
   const int ltime = (argc >= 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
   std::cout << ltime << std::endl;
 
-  camera.set(Vec(50.0, 40.8, 220.0), Vec(50.0, 40.8, 0.0), 40.0);
+  camera.set(Vector3(50.0, 40.8, 220.0), Vector3(50.0, 40.8, 0.0), 40.0);
 
   struct timeval startTime, currentTime;
   gettimeofday(&startTime, NULL);

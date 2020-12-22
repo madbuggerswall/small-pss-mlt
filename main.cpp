@@ -562,8 +562,6 @@ int main(int argc, char* argv[]) {
   unsigned long samples = 0;
   const int ltime = (argc >= 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
   std::cout << ltime << std::endl;
-  static const char* progr = "|*-/";
-  FILE* f;
 
   camera.set(Vec(50.0, 40.8, 220.0), Vec(50.0, 40.8, 0.0), 40.0);
 
@@ -623,6 +621,7 @@ int main(int argc, char* argv[]) {
     if (rnd() <= a) current = proposal;
   }
 
+  std::cout << std::endl << "Writing file..." << std::endl;
   // write out .ppm
   std::string fileName;
   if (argc > 2)

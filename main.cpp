@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 
+#include "Random.hpp"
 #include "Sphere.hpp"
 #include "Vector3.hpp"
 
@@ -43,16 +44,6 @@ Sphere sph[] = {Sphere(6.0, Vector3(10, 70, 51.6), Color(100., 100., 100.), LGHT
                 Sphere(20, Vector3(50, 20, 50), Color(0.25, 0.75, 0.25), DIFF),
                 Sphere(16.5, Vector3(19, 16.5, 25), Color(0.99, 0.99, 0.99), GLOS),
                 Sphere(16.5, Vector3(77, 16.5, 78), Color(0.99, 0.99, 0.99), GLOS)};
-
-// xorshift PRNG
-double rnd(void) {
-  static unsigned int x = 123456789, y = 362436069, z = 521288629, w = 88675123;
-  unsigned int t = x ^ (x << 11);
-  x = y;
-  y = z;
-  z = w;
-  return (w = (w ^ (w >> 19)) ^ (t ^ (t >> 8))) * (1.0 / 4294967296.0);
-}
 
 Vector3 VecRandom(const double rnd1, const double rnd2) {
   const double temp1 = 2.0 * PI * rnd1, temp2 = 2.0 * rnd2 - 1.0;
@@ -105,16 +96,20 @@ struct Camera {
   Camera() = default;
   Camera(const Vector3& origin, const Vector3& lookAt, const double fov) : origin(origin) {
     dist = pixelHeight / (2.0 * tan((fov / 2.0) * (PI / 180.0)));
-    w = (lookAt - origin).norm();
-    u = (w % Vector3(0.0, 1.0, 0.0)).norm();
-    v = u % w;
+    w = (lookAt - origin).normalize();
+    u = cross(w, Vector3(0.0, 1.0, 0.0)).normalize();
+    v = cross(u, w);
   }
   void set(const Vector3& origin, const Vector3& lookAt, const double fov) {
     this->origin = origin;
     dist = pixelHeight / (2.0 * tan((fov / 2.0) * (PI / 180.0)));
-    w = (lookAt - origin).norm();
-    u = (w % Vector3(0.0, 1.0, 0.0)).norm();
-    v = u % w;
+    w = (lookAt - origin).normalize();
+    u = cross(w, Vector3(0.0, 1.0, 0.0)).normalize();
+    v = cross(u, w);
+
+    std::cout << "w: " << w << std::endl;
+    std::cout << "u: " << u << std::endl;
+    std::cout << "v: " << v << std::endl;
   }
 };
 
@@ -176,7 +171,7 @@ void AccumulatePathContribution(const PathContribution& pathContrib, const doubl
 // primary space Markov chain
 inline double perturb(const double value, const double s1, const double s2) {
   double result;
-  double randomValue = rnd();
+  double randomValue = Random::fraction();
   if (randomValue < 0.5) {
     randomValue = randomValue * 2.0;
     result = value + s2 * exp(-log(s2 / s1) * randomValue);
@@ -192,12 +187,12 @@ struct MarkovChain {
   double states[numStates];
   PathContribution pathContribution;
   MarkovChain() {
-    for (int i = 0; i < numStates; i++) states[i] = rnd();
+    for (int i = 0; i < numStates; i++) states[i] = Random::fraction();
   }
   MarkovChain largeStep() const {
     MarkovChain result;
     result.pathContribution = (*this).pathContribution;
-    for (int i = 0; i < numStates; i++) result.states[i] = rnd();
+    for (int i = 0; i < numStates; i++) result.states[i] = Random::fraction();
     return result;
   }
   MarkovChain mutate() const {
@@ -221,35 +216,36 @@ void InitRandomNumbersByChain(const MarkovChain& markovChain) {
   for (int i = 0; i < numStates; i++) prnds[i] = markovChain.states[i];
 }
 void InitRandomNumbers() {
-  for (int i = 0; i < numStates; i++) prnds[i] = rnd();
+  for (int i = 0; i < numStates; i++) prnds[i] = Random::fraction();
 }
 
 // local sampling PDFs and standard terms
 inline double GeometryTerm(const Vertex e0, const Vertex e1) {
   const Vector3 dv = e1.point - e0.point;
-  const double d2 = dv.dot(dv);
-  return fabs(e0.normal.dot(dv) * e1.normal.dot(dv)) / (d2 * d2);
+  const double d2 = dot(dv, dv);
+  return fabs(dot(e0.normal, dv) * dot(e1.normal, dv)) / (d2 * d2);
 }
 inline double DirectionToArea(const Vertex current, const Vertex next) {
   const Vector3 dv = next.point - current.point;
-  const double d2 = dv.dot(dv);
-  return fabs(next.normal.dot(dv)) / (d2 * sqrt(d2));
+  const double d2 = dot(dv, dv);
+  return fabs(dot(next.normal, dv)) / (d2 * sqrt(d2));
 }
 
 inline double GlossyBRDF(const Vector3& wi, const Vector3& n, const Vector3& wo) {
-  const double won = wo.dot(n);
-  const double win = wi.dot(n);
-  const Vector3 r = (-wi).reflect(n);
-  return (glossiness + 2.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), glossiness) / std::fmax(fabs(win), fabs(won));
+  const double won = dot(wo, n);
+  const double win = dot(wi, n);
+  const Vector3 reflected = (-wi).reflect(n);
+  return (glossiness + 2.0) / (2.0 * PI) * pow(std::fmax(dot(reflected, wo), 0.0), glossiness) /
+         std::fmax(fabs(win), fabs(won));
 }
 inline double GlossyPDF(const Vector3& wi, const Vector3& n, const Vector3& wo) {
-  const Vector3 r = (-wi).reflect(n);
-  return (glossiness + 1.0) / (2.0 * PI) * pow(std::fmax(r.dot(wo), 0.0), glossiness);
+  const Vector3 reflected = (-wi).reflect(n);
+  return (glossiness + 1.0) / (2.0 * PI) * pow(std::fmax(dot(reflected, wo), 0.0), glossiness);
 }
 
 inline double LambertianBRDF(const Vector3& wi, const Vector3& normal, const Vector3& wo) { return 1.0 / PI; }
 inline double LambertianPDF(const Vector3& wi, const Vector3& normal, const Vector3& wo) {
-  return fabs(wo.dot(normal)) / PI;
+  return fabs(dot(wo, normal)) / PI;
 }
 
 // measurement contribution function
@@ -259,23 +255,23 @@ Color PathThroughput(const Path& Xb) {
     if (i == 0) {
       double W = 1.0 / double(pixelWidth * pixelHeight);
       Vector3 d0 = Xb[1].point - Xb[0].point;
-      const double dist2 = d0.dot(d0);
+      const double dist2 = dot(d0, d0);
       d0 = d0 * (1.0 / sqrt(dist2));
-      const double c = d0.dot(camera.w);
+      const double c = dot(d0, camera.w);
       const double ds2 = (camera.dist / c) * (camera.dist / c);
       W = W / (c / ds2);
-      color = color * (W * fabs(d0.dot(Xb[1].normal) / dist2));
+      color = color * (W * fabs(dot(d0, Xb[1].normal) / dist2));
     } else if (i == (Xb.vertexCount - 1)) {
       if (sph[Xb[i].id].refl == LGHT) {
-        const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).norm();
+        const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).normalize();
         const double L = LambertianBRDF(d0, Xb[i].normal, d0);
         color *= sph[Xb[i].id].color * L;
       } else {
         color *= 0.0;
       }
     } else {
-      const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).norm();
-      const Vector3 d1 = (Xb[i + 1].point - Xb[i].point).norm();
+      const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).normalize();
+      const Vector3 d1 = (Xb[i + 1].point - Xb[i].point).normalize();
       double BRDF = 0.0;
       if (sph[Xb[i].id].refl == DIFF) {
         BRDF = LambertianBRDF(d0, Xb[i].normal, d1);
@@ -302,28 +298,28 @@ bool isConnectable(const Path& Xeye, const Path& Xlight, double& px, double& py)
   } else if ((Xeye.vertexCount >= 2) && (Xlight.vertexCount == 0)) {
     // direct hit to the light source
     result = (sph[Xeye_e.id].refl == LGHT);
-    direction = (Xeye[1].point - Xeye[0].point).norm();
+    direction = (Xeye[1].point - Xeye[0].point).normalize();
   } else if ((Xeye.vertexCount == 1) && (Xlight.vertexCount >= 1)) {
     // light tracing
-    Ray ray(Xeye[0].point, (Xlight_e.point - Xeye[0].point).norm());
+    Ray ray(Xeye[0].point, (Xlight_e.point - Xeye[0].point).normalize());
     double t;
     int id;
     result = (intersect(ray, t, id)) && (id == Xlight_e.id);
     direction = ray.direction;
   } else {
     // shadow ray connection
-    Ray ray(Xeye_e.point, (Xlight_e.point - Xeye_e.point).norm());
+    Ray ray(Xeye_e.point, (Xlight_e.point - Xeye_e.point).normalize());
     double t;
     int id;
     result = (intersect(ray, t, id)) && (id == Xlight_e.id);
-    direction = (Xeye[1].point - Xeye[0].point).norm();
+    direction = (Xeye[1].point - Xeye[0].point).normalize();
   }
 
   // get the pixel location
   Vector3 screenCenter = camera.origin + (camera.w * camera.dist);
-  Vector3 screenPosition = camera.origin + (direction * (camera.dist / direction.dot(camera.w))) - screenCenter;
-  px = camera.u.dot(screenPosition) + (pixelWidth * 0.5);
-  py = -camera.v.dot(screenPosition) + (pixelHeight * 0.5);
+  Vector3 screenPosition = camera.origin + (direction * (camera.dist / dot(direction, camera.w))) - screenCenter;
+  px = dot(camera.u, screenPosition) + (pixelWidth * 0.5);
+  py = dot(-camera.v, screenPosition) + (pixelHeight * 0.5);
   return result && ((px >= 0) && (px < pixelWidth) && (py >= 0) && (py < pixelHeight));
 }
 
@@ -357,8 +353,8 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
         pdfValue *= 1.0;
       } else if (i == 0) {
         pdfValue *= 1.0 / double(pixelWidth * pixelHeight);
-        Vector3 Direction0 = (sampledPath[1].point - sampledPath[0].point).norm();
-        double CosTheta = Direction0.dot(camera.w);
+        Vector3 Direction0 = (sampledPath[1].point - sampledPath[0].point).normalize();
+        double CosTheta = dot(Direction0, camera.w);
         double DistanceToScreen2 = camera.dist / CosTheta;
         DistanceToScreen2 = DistanceToScreen2 * DistanceToScreen2;
         pdfValue /= (CosTheta / DistanceToScreen2);
@@ -366,8 +362,8 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
         pdfValue *= DirectionToArea(sampledPath[0], sampledPath[1]);
       } else {
         // PDF of sampling ith vertex
-        Vector3 Direction0 = (sampledPath[i - 1].point - sampledPath[i].point).norm();
-        Vector3 Direction1 = (sampledPath[i + 1].point - sampledPath[i].point).norm();
+        Vector3 Direction0 = (sampledPath[i - 1].point - sampledPath[i].point).normalize();
+        Vector3 Direction1 = (sampledPath[i + 1].point - sampledPath[i].point).normalize();
 
         if (sph[sampledPath[i].id].refl == DIFF) {
           pdfValue *= LambertianPDF(Direction0, sampledPath[i].normal, Direction1);
@@ -385,13 +381,15 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
           // PDF of sampling the light position (assume area-based sampling)
           pdfValue *= (1.0 / light_area);
         } else if (i == 0) {
-          Vector3 Direction0 = (sampledPath[pathLength - 1].point - sampledPath[pathLength].point).norm();
+          Vector3 Direction0 = (sampledPath[pathLength - 1].point - sampledPath[pathLength].point).normalize();
           pdfValue *= LambertianPDF(sampledPath[pathLength].normal, sampledPath[pathLength].normal, Direction0);
           pdfValue *= DirectionToArea(sampledPath[pathLength], sampledPath[pathLength - 1]);
         } else {
           // PDF of sampling (PathLength - i)th vertex
-          Vector3 Direction0 = (sampledPath[pathLength - (i - 1)].point - sampledPath[pathLength - i].point).norm();
-          Vector3 Direction1 = (sampledPath[pathLength - (i + 1)].point - sampledPath[pathLength - i].point).norm();
+          Vector3 Direction0 =
+              (sampledPath[pathLength - (i - 1)].point - sampledPath[pathLength - i].point).normalize();
+          Vector3 Direction1 =
+              (sampledPath[pathLength - (i + 1)].point - sampledPath[pathLength - i].point).normalize();
 
           if (sph[sampledPath[pathLength - i].id].refl == DIFF) {
             pdfValue *= LambertianPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
@@ -420,8 +418,8 @@ void TracePath(Path& path, const Ray& ray, const int rayLevel, const int maxRayL
   if (!intersect(ray, t, id)) return;
   const Sphere& obj = sph[id];
   Vector3 intersectionPoint = ray.origin + ray.direction * t;
-  Vector3 normal = (intersectionPoint - obj.position).norm();
-  normal = normal.dot(ray.direction) < 0 ? normal : normal * -1;
+  Vector3 normal = (intersectionPoint - obj.position).normalize();
+  normal = dot(normal, ray.direction) < 0 ? normal : normal * -1;
 
   // set path data
   path[path.vertexCount] = Vertex(intersectionPoint, normal, id);
@@ -469,7 +467,7 @@ Ray SampleCamera(const double rnd1, const double rnd2) {
   const Vector3 su = camera.u * -(0.5 - rnd1) * pixelWidth;
   const Vector3 sv = camera.v * (0.5 - rnd2) * pixelHeight;
   const Vector3 sw = camera.w * camera.dist;
-  return Ray(camera.origin, (su + sv + sw).norm());
+  return Ray(camera.origin, (su + sv + sw).normalize());
 }
 Path GenerateEyePath(const int maxEyeEvents) {
   Path result;
@@ -599,7 +597,7 @@ int main(int argc, char* argv[]) {
 
     // sample the path
     double isLargeStepDone;
-    if (rnd() <= largeStepProb) {
+    if (Random::fraction() <= largeStepProb) {
       proposal = current.largeStep();
       isLargeStepDone = 1.0;
     } else {
@@ -622,7 +620,7 @@ int main(int argc, char* argv[]) {
                                  (1.0 - a) / (current.pathContribution.sc / b + largeStepProb));
 
     // update the chain
-    if (rnd() <= a) current = proposal;
+    if (Random::fraction() <= a) current = proposal;
   }
 
   std::cout << std::endl << "Writing file..." << std::endl;

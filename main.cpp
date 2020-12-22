@@ -1,21 +1,25 @@
 // smallpssmlt, primary sample space MLT by Toshiya Hachisuka
-#include <stdio.h>   // Usage: ./smallpssmlt time_sec
-#include <stdlib.h>  // derived from smallpt, a path tracer by Kevin Beason, 2008
+// Usage: ./smallpssmlt time_sec
+// derived from smallpt, a path tracer by Kevin Beason, 2008
 
-#include <cmath>  // derived from smallpt, a path tracer by Kevin Beason, 2008
-#include <fstream>
-#include <iostream>  // derived from smallpt, a path tracer by Kevin Beason, 2008
-
-#include "Sphere.hpp"   // derived from smallpt, a path tracer by Kevin Beason, 2008
-#include "Vector3.hpp"  // derived from smallpt, a path tracer by Kevin Beason, 2008
 // 2015/01/26: Changed the default parameters. Fixed the bug that the normal was incorrectly flipped for diffuse
 // surfaces (thanks to Hao Qin).
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
+
+#include <fstream>
+#include <iostream>
+
+#include "Sphere.hpp"
+#include "Vector3.hpp"
 
 const double PI = 3.14159265358979;
 
 // parameters
 const int minPathLength = 3;  // avoid sampling direct illumination
-const int maxPathLength = 24;
+const int maxPathLength = 20;
 const double glossiness = 25.0;
 const int pixelWidth = 640;
 const int pixelHeight = 480;
@@ -28,7 +32,17 @@ const int maxEvents = maxPathLength + 1;
 const int numStatesSubpath = (maxEvents + 2) * numRNGsPerEvent;
 const int numStates = numStatesSubpath * 2;
 
-#include <sys/time.h>
+// Scene: radius, position, color, material
+Sphere sph[] = {Sphere(6.0, Vec(10, 70, 51.6), Color(100., 100., 100.), LGHT),
+                Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Color(0.75, 0.25, 0.25), GLOS),
+                Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Color(0.25, 0.25, 0.75), GLOS),
+                Sphere(1e5, Vec(50, 40.8, 1e5), Color(0.75, 0.65, 0.75), DIFF),
+                Sphere(1e5, Vec(50, 40.8, -1e5 + 350), Color(0.50, 0.50, 0.50), DIFF),
+                Sphere(1e5, Vec(50, 1e5, 81.6), Color(0.65, 0.75, 0.75), GLOS),
+                Sphere(1e5, Vec(50, -1e5 + 81.6, 81.6), Color(0.75, 0.75, 0.65), GLOS),
+                Sphere(20, Vec(50, 20, 50), Color(0.25, 0.75, 0.25), DIFF),
+                Sphere(16.5, Vec(19, 16.5, 25), Color(0.99, 0.99, 0.99), GLOS),
+                Sphere(16.5, Vec(77, 16.5, 78), Color(0.99, 0.99, 0.99), GLOS)};
 
 // xorshift PRNG
 double rnd(void) {
@@ -50,18 +64,6 @@ Vec VecCosine(const Vec& n, const double g, const double rnd1, const double rnd2
   const double s = std::sin(temp1), c = std::cos(temp1), t = std::sqrt(1.0 - temp2 * temp2);
   return Vec(s * t, temp2, c * t).onb(n);
 }
-
-// Scene: radius, position, color, material
-Sphere sph[] = {Sphere(6.0, Vec(10, 70, 51.6), Vec(100., 100., 100.), LGHT),
-                Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(0.75, 0.25, 0.25), GLOS),
-                Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(0.25, 0.25, 0.75), GLOS),
-                Sphere(1e5, Vec(50, 40.8, 1e5), Vec(0.75, 0.65, 0.75), DIFF),
-                Sphere(1e5, Vec(50, 40.8, -1e5 + 350), Vec(0.50, 0.50, 0.50), DIFF),
-                Sphere(1e5, Vec(50, 1e5, 81.6), Vec(0.65, 0.75, 0.75), GLOS),
-                Sphere(1e5, Vec(50, -1e5 + 81.6, 81.6), Vec(0.75, 0.75, 0.65), GLOS),
-                Sphere(20, Vec(50, 20, 50), Vec(0.25, 0.75, 0.25), DIFF),
-                Sphere(16.5, Vec(19, 16.5, 25), Vec(0.99, 0.99, 0.99), GLOS),
-                Sphere(16.5, Vec(77, 16.5, 78), Vec(0.99, 0.99, 0.99), GLOS)};
 
 const int light_id = 0;
 const double light_area = (4.0 * PI * sph[light_id].radius * sph[light_id].radius);
@@ -119,7 +121,7 @@ struct Camera {
 Camera camera;
 const int camera_id = -2;
 // image
-Vec image[pixelWidth * pixelHeight];
+Color image[pixelWidth * pixelHeight];
 
 // tone mapping
 int toInt(double x) { return int(pow(1 - exp(-x), 1 / 2.2) * 255 + .5); }
@@ -143,9 +145,9 @@ struct Path {
 
 struct Contribution {
   double x, y;
-  Vec color;
+  Color color;
   Contribution(){};
-  Contribution(double x, double y, const Vec& color) : x(x), y(y), color(color) {}
+  Contribution(double x, double y, const Color& color) : x(x), y(y), color(color) {}
 };
 
 struct PathContribution {
@@ -165,7 +167,7 @@ void AccumulatePathContribution(const PathContribution& pathContrib, const doubl
   if (pathContrib.sc == 0) return;
   for (int i = 0; i < pathContrib.contributionCount; i++) {
     const int ix = int(pathContrib[i].x), iy = int(pathContrib[i].y);
-    const Vec color = pathContrib[i].color * mScaling;
+    const Color color = pathContrib[i].color * mScaling;
     if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) continue;
     image[ix + iy * pixelWidth] = image[ix + iy * pixelWidth] + color;
   }
@@ -249,8 +251,8 @@ inline double LambertianBRDF(const Vec& wi, const Vec& normal, const Vec& wo) { 
 inline double LambertianPDF(const Vec& wi, const Vec& normal, const Vec& wo) { return fabs(wo.dot(normal)) / PI; }
 
 // measurement contribution function
-Vec PathThroughput(const Path& Xb) {
-  Vec f = Vec(1.0, 1.0, 1.0);
+Color PathThroughput(const Path& Xb) {
+  Color color = Color(1.0, 1.0, 1.0);
   for (int i = 0; i < Xb.vertexCount; i++) {
     if (i == 0) {
       double W = 1.0 / double(pixelWidth * pixelHeight);
@@ -260,14 +262,14 @@ Vec PathThroughput(const Path& Xb) {
       const double c = d0.dot(camera.w);
       const double ds2 = (camera.dist / c) * (camera.dist / c);
       W = W / (c / ds2);
-      f = f * (W * fabs(d0.dot(Xb[1].normal) / dist2));
+      color = color * (W * fabs(d0.dot(Xb[1].normal) / dist2));
     } else if (i == (Xb.vertexCount - 1)) {
       if (sph[Xb[i].id].refl == LGHT) {
         const Vec d0 = (Xb[i - 1].point - Xb[i].point).norm();
         const double L = LambertianBRDF(d0, Xb[i].normal, d0);
-        f = f.mul(sph[Xb[i].id].color * L);
+        color *= sph[Xb[i].id].color * L;
       } else {
-        f = f * 0.0;
+        color *= 0.0;
       }
     } else {
       const Vec d0 = (Xb[i - 1].point - Xb[i].point).norm();
@@ -278,11 +280,11 @@ Vec PathThroughput(const Path& Xb) {
       } else if (sph[Xb[i].id].refl == GLOS) {
         BRDF = GlossyBRDF(d0, Xb[i].normal, d1);
       }
-      f = f.mul(sph[Xb[i].id].color * BRDF * GeometryTerm(Xb[i], Xb[i + 1]));
+      color *= sph[Xb[i].id].color * BRDF * GeometryTerm(Xb[i], Xb[i + 1]);
     }
-    if (f.Max() == 0.0) return f;
+    if (color.max() == 0.0) return color;
   }
-  return f;
+  return color;
 }
 
 // check if the path can be connected or not (visibility term)
@@ -333,7 +335,7 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
   // number of eye subpath vertices
   for (int numEyeVertices = 0; numEyeVertices <= pathLength + 1; numEyeVertices++) {
     // extended BPT
-    double p = 1.0;
+    double pdfValue = 1.0;
 
     // number of light subpath vertices
     int numLightVertices = (pathLength + 1) - numEyeVertices;
@@ -350,60 +352,60 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
       if (i == -1) {
         // PDF of sampling the camera position (the same delta function with the scaling 1.0 for all the PDFs - they
         // cancel out)
-        p = p * 1.0;
+        pdfValue *= 1.0;
       } else if (i == 0) {
-        p = p * 1.0 / double(pixelWidth * pixelHeight);
+        pdfValue *= 1.0 / double(pixelWidth * pixelHeight);
         Vec Direction0 = (sampledPath[1].point - sampledPath[0].point).norm();
         double CosTheta = Direction0.dot(camera.w);
         double DistanceToScreen2 = camera.dist / CosTheta;
         DistanceToScreen2 = DistanceToScreen2 * DistanceToScreen2;
-        p = p / (CosTheta / DistanceToScreen2);
+        pdfValue /= (CosTheta / DistanceToScreen2);
 
-        p = p * DirectionToArea(sampledPath[0], sampledPath[1]);
+        pdfValue *= DirectionToArea(sampledPath[0], sampledPath[1]);
       } else {
         // PDF of sampling ith vertex
         Vec Direction0 = (sampledPath[i - 1].point - sampledPath[i].point).norm();
         Vec Direction1 = (sampledPath[i + 1].point - sampledPath[i].point).norm();
 
         if (sph[sampledPath[i].id].refl == DIFF) {
-          p = p * LambertianPDF(Direction0, sampledPath[i].normal, Direction1);
+          pdfValue *= LambertianPDF(Direction0, sampledPath[i].normal, Direction1);
         } else if (sph[sampledPath[i].id].refl == GLOS) {
-          p = p * GlossyPDF(Direction0, sampledPath[i].normal, Direction1);
+          pdfValue *= GlossyPDF(Direction0, sampledPath[i].normal, Direction1);
         }
-        p = p * DirectionToArea(sampledPath[i], sampledPath[i + 1]);
+        pdfValue *= DirectionToArea(sampledPath[i], sampledPath[i + 1]);
       }
     }
 
-    if (p != 0.0) {
+    if (pdfValue != 0.0) {
       // sampling from the light source
       for (int i = -1; i <= numLightVertices - 2; i++) {
         if (i == -1) {
           // PDF of sampling the light position (assume area-based sampling)
-          p = p * (1.0 / light_area);
+          pdfValue *= (1.0 / light_area);
         } else if (i == 0) {
           Vec Direction0 = (sampledPath[pathLength - 1].point - sampledPath[pathLength].point).norm();
-          p = p * LambertianPDF(sampledPath[pathLength].normal, sampledPath[pathLength].normal, Direction0);
-          p = p * DirectionToArea(sampledPath[pathLength], sampledPath[pathLength - 1]);
+          pdfValue *= LambertianPDF(sampledPath[pathLength].normal, sampledPath[pathLength].normal, Direction0);
+          pdfValue *= DirectionToArea(sampledPath[pathLength], sampledPath[pathLength - 1]);
         } else {
           // PDF of sampling (PathLength - i)th vertex
           Vec Direction0 = (sampledPath[pathLength - (i - 1)].point - sampledPath[pathLength - i].point).norm();
           Vec Direction1 = (sampledPath[pathLength - (i + 1)].point - sampledPath[pathLength - i].point).norm();
 
           if (sph[sampledPath[pathLength - i].id].refl == DIFF) {
-            p = p * LambertianPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
+            pdfValue *= LambertianPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
           } else if (sph[sampledPath[pathLength - i].id].refl == GLOS) {
-            p = p * GlossyPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
+            pdfValue *= GlossyPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
           }
-          p = p * DirectionToArea(sampledPath[pathLength - i], sampledPath[pathLength - (i + 1)]);
+          pdfValue *= DirectionToArea(sampledPath[pathLength - i], sampledPath[pathLength - (i + 1)]);
         }
       }
     }
 
     if (specified && (numEyeVertices == specifiedNumEyeVertices) && (numLightVertices == specifiedNumLightVertices))
-      return p;
+      return pdfValue;
 
     // sum the probability density (use Kahan summation algorithm to reduce numerical issues)
-    SumPDFs.add(p);
+    SumPDFs.add(pdfValue);
   }
   return SumPDFs.sum;
 }
@@ -534,20 +536,20 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
       sampledPath.vertexCount = numEyeVertices + numLightVertices;
 
       // evaluate the path
-      Vec f = PathThroughput(sampledPath);
-      double p = PathProbablityDensity(sampledPath, pathLength, numEyeVertices, numLightVertices);
-      double w = MISWeight(sampledPath, numEyeVertices, numLightVertices, pathLength);
-      if ((w <= 0.0) || (p <= 0.0)) continue;
+      Color f = PathThroughput(sampledPath);
+      double pathPDF = PathProbablityDensity(sampledPath, pathLength, numEyeVertices, numLightVertices);
+      double weight = MISWeight(sampledPath, numEyeVertices, numLightVertices, pathLength);
+      if ((weight <= 0.0) || (pathPDF <= 0.0)) continue;
 
-      Vec c = f * (w / p);
-      if (c.Max() <= 0.0) continue;
+      Color color = f * (weight / pathPDF);
+      if (color.max() <= 0.0) continue;
 
       // store the pixel contribution
-      result[result.contributionCount] = Contribution(px, py, c);
+      result[result.contributionCount] = Contribution(px, py, color);
       result.contributionCount++;
 
       // scalar contribution function
-      result.sc = std::fmax(c.Max(), result.sc);
+      result.sc = std::fmax(color.max(), result.sc);
 
       // return immediately if the technique is specified
       if (specified && (specifiedNumEyeVertices == numEyeVertices) && (specifiedNumLightVertices == numLightVertices))
@@ -638,7 +640,8 @@ int main(int argc, char* argv[]) {
   //	Divide the color total by the number of samples.
   double s = double(pixelWidth * pixelHeight) / double(samples);
   for (int i = 0; i < pixelWidth * pixelHeight; i++) {
-    outputFile << static_cast<unsigned char>(toInt(image[i].x * s)) << static_cast<unsigned char>(toInt(image[i].y * s))
-               << static_cast<unsigned char>(toInt(image[i].z * s));
+    outputFile << static_cast<unsigned char>(toInt(image[i].red * s))
+               << static_cast<unsigned char>(toInt(image[i].green * s))
+               << static_cast<unsigned char>(toInt(image[i].blue * s));
   }
 }

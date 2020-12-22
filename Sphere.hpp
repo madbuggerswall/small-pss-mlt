@@ -7,15 +7,16 @@ enum Refl_t { DIFF, GLOS, LGHT };  // material types, used in radiance()
 
 struct Sphere {
   double radius;
-  Vec position, color;
+  Vec position;
+  Color color;
   Refl_t refl;
-  Sphere(double radius, Vec position, Vec color, Refl_t re_) :
+  Sphere(double radius, Vec position, Color color, Refl_t re_) :
       radius(radius),
       position(position),
       color(color),
       refl(re_) {}
-  
-	inline double intersect(const Ray& ray) const {  // returns distance
+
+  inline double intersect(const Ray& ray) const {  // returns distance
     Vec op = position - ray.origin;
     double t, b = op.dot(ray.direction), det = b * b - op.dot(op) + radius * radius;
     if (det < 0)

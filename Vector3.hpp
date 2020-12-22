@@ -14,7 +14,7 @@ struct Vec {
   inline Vec operator-(const Vec& rhs) const { return Vec(x - rhs.x, y - rhs.y, z - rhs.z); }
   inline Vec operator+(double rhs) const { return Vec(x + rhs, y + rhs, z + rhs); }
   inline Vec operator-(double rhs) const { return Vec(x - rhs, y - rhs, z - rhs); }
-  inline Vec operator*(double rhs) const { return Vec(x * rhs, y * rhs, z * rhs); }
+  inline Vec operator*(double scalar) const { return Vec(x * scalar, y * scalar, z * scalar); }
   inline Vec mul(const Vec& rhs) const { return Vec(x * rhs.x, y * rhs.y, z * rhs.z); }
   inline Vec norm() { return (*this) * (1.0 / sqrt(x * x + y * y + z * z)); }
   inline double dot(const Vec& rhs) const { return x * rhs.x + y * rhs.y + z * rhs.z; }
@@ -22,7 +22,7 @@ struct Vec {
     return Vec(y * rhs.z - z * rhs.y, z * rhs.x - x * rhs.z, x * rhs.y - y * rhs.x);
   }
   inline Vec reflect(const Vec& n) const { return (*this) - n * 2.0 * n.dot((*this)); }
-  inline double Max() const { return std::fmax(std::fmax(x, y), z); }
+  inline double max() const { return std::fmax(std::fmax(x, y), z); }
   inline Vec onb(const Vec& n) const {
     Vec u, w, v = n;
     if (n.z < -0.9999999) {
@@ -36,6 +36,32 @@ struct Vec {
     }
     return Vec((*this).dot(Vec(u.x, v.x, w.x)), (*this).dot(Vec(u.y, v.y, w.y)), (*this).dot(Vec(u.z, v.z, w.z)));
   }
+};
+
+struct Color {
+  double red, green, blue;
+  Color() : red(0), green(0), blue(0) {}
+  Color(double red, double green, double blue) : red(red), green(green), blue(blue) {}
+
+  inline Color operator*(double scalar) const { return Color(red * scalar, green * scalar, blue * scalar); }
+  inline Color operator*(const Color& rhs) const { return Color(red * rhs.red, green * rhs.green, blue * rhs.blue); }
+  inline Color operator+(const Color& rhs) const { return Color(red + rhs.red, green + rhs.green, blue + rhs.blue); }
+  inline Color operator-(const Color& rhs) const { return Color(red - rhs.red, green - rhs.green, blue - rhs.blue); }
+
+  inline Color& operator*=(double scalar) {
+    red *= scalar;
+    green *= scalar;
+    blue *= scalar;
+    return *this;
+  }
+  inline Color& operator*=(const Color& rhs) {
+    red *= rhs.red;
+    green *= rhs.green;
+    blue *= rhs.blue;
+    return *this;
+  }
+
+  inline double max() const { return std::fmax(std::fmax(red, green), blue); }
 };
 
 // ray-sphere intersection (extended from smallpt)

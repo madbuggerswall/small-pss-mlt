@@ -6,7 +6,8 @@
 // vector: position, also color (r,g,b) (extended from smallpt)
 struct Vec {
   double x, y, z;
-  Vec(double x = 0, double y = 0, double z = 0) : x(x), y(y), z(z) {}
+  Vec() : x(0), y(0), z(0) {}
+  Vec(double x, double y, double z) : x(x), y(y), z(z) {}
 
   inline Vec operator-() const { return Vec(-x, -y, -z); }
   inline Vec operator+(const Vec& rhs) const { return Vec(x + rhs.x, y + rhs.y, z + rhs.z); }

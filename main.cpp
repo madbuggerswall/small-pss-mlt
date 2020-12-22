@@ -15,7 +15,7 @@ const double PI = 3.14159265358979;
 
 // parameters
 const int minPathLength = 3;  // avoid sampling direct illumination
-const int maxPathLength = 20;
+const int maxPathLength = 24;
 const double glossiness = 25.0;
 const int pixelWidth = 640;
 const int pixelHeight = 480;
@@ -131,6 +131,7 @@ struct Vertex {
   Vertex(){};
   Vertex(const Vec& point, const Vec& normal, int id) : point(point), normal(normal), id(id) {}
 };
+
 struct Path {
   Vertex vertices[maxEvents];
   int vertexCount;
@@ -139,29 +140,34 @@ struct Path {
   Vertex& operator[](int index) { return vertices[index]; }
   Vertex operator[](int index) const { return vertices[index]; }
 };
+
 struct Contribution {
   double x, y;
-  Vec c;
+  Vec color;
   Contribution(){};
-  Contribution(double x, double y, const Vec& c) : x(x), y(y), c(c) {}
-};
-struct PathContribution {
-  Contribution c[maxEvents * maxEvents];
-  int n;
-  double sc;
-  PathContribution() {
-    n = 0;
-    sc = 0.0;
-  }
+  Contribution(double x, double y, const Vec& color) : x(x), y(y), color(color) {}
 };
 
-void AccumulatePathContribution(const PathContribution& pc, const double mScaling) {
-  if (pc.sc == 0) return;
-  for (int i = 0; i < pc.n; i++) {
-    const int ix = int(pc.c[i].x), iy = int(pc.c[i].y);
-    const Vec c = pc.c[i].c * mScaling;
+struct PathContribution {
+ private:
+  Contribution contributions[maxEvents * maxEvents];
+
+ public:
+  int contributionCount;
+  double sc;
+  PathContribution() : contributionCount(0), sc(0.0) {}
+
+  Contribution& operator[](int index) { return contributions[index]; }
+  Contribution operator[](int index) const { return contributions[index]; }
+};
+
+void AccumulatePathContribution(const PathContribution& pathContrib, const double mScaling) {
+  if (pathContrib.sc == 0) return;
+  for (int i = 0; i < pathContrib.contributionCount; i++) {
+    const int ix = int(pathContrib[i].x), iy = int(pathContrib[i].y);
+    const Vec color = pathContrib[i].color * mScaling;
     if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) continue;
-    image[ix + iy * pixelWidth] = image[ix + iy * pixelWidth] + c;
+    image[ix + iy * pixelWidth] = image[ix + iy * pixelWidth] + color;
   }
 }
 
@@ -494,7 +500,7 @@ double MISWeight(const Path& sampledPath, const int numEyeVertices, const int nu
 PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const int specifiedNumEyeVertices = -1,
                               const int specifiedNumLightVertices = -1) {
   PathContribution result;
-  result.n = 0;
+  result.contributionCount = 0;
   result.sc = 0.0;
   const bool specified = (specifiedNumEyeVertices != -1) && (specifiedNumLightVertices != -1);
 
@@ -537,8 +543,8 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
       if (c.Max() <= 0.0) continue;
 
       // store the pixel contribution
-      result.c[result.n] = Contribution(px, py, c);
-      result.n++;
+      result[result.contributionCount] = Contribution(px, py, c);
+      result.contributionCount++;
 
       // scalar contribution function
       result.sc = std::fmax(c.Max(), result.sc);
@@ -583,7 +589,7 @@ int main(int argc, char* argv[]) {
   // integration
   for (;;) {
     samples++;
-    fprintf(stderr, "\rPSSMLT %c", progr[(samples >> 8) & 3]);
+    std::cout << "\rSamples: " << samples << std::flush;
     if (samples % pixelWidth) {
       gettimeofday(&currentTime, NULL);
       if (ltime < ((currentTime.tv_sec - startTime.tv_sec) + (currentTime.tv_usec - startTime.tv_usec) * 1.0E-6)) break;

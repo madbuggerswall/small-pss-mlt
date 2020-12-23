@@ -9,11 +9,13 @@
 
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 
 #include "Color.hpp"
 #include "Random.hpp"
 #include "Ray.hpp"
 #include "Sphere.hpp"
+#include "Stopwatch.hpp"
 #include "Vector3.hpp"
 
 constexpr double PI = 3.14159265358979;
@@ -551,19 +553,22 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
 // main rendering process
 int main(int argc, char* argv[]) {
   unsigned long samples = 0;
-  const int ltime = (argc >= 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
-  std::cout << ltime << std::endl;
+  const int runningTime = (argc >= 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
+  std::cout << "Run for " << runningTime << " seconds." << std::endl;
 
   camera = Camera(Vector3(50.0, 40.8, 220.0), Vector3(50.0, 40.8, 0.0), 40.0);
 
-  struct timeval startTime, currentTime;
-  gettimeofday(&startTime, NULL);
+  // struct timeval startTime, currentTime;
+  // gettimeofday(&startTime, NULL);
+
+  Stopwatch stopwatch;
 
   // PSSMLT
   // estimate normalization constant
   double b = 0.0;
   for (int i = 0; i < N_Init; i++) {
-    std::cout << "\rPSSMLT Initializing: " << 100.0 * i / (N_Init) << std::flush;
+    std::cout << std::fixed;
+    std::cout << std::setprecision(1) << "\rPSSMLT Initializing: " << 100.0 * i / (N_Init) << std::flush;
     InitRandomNumbers();
     b += CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents)).sc;
   }
@@ -576,12 +581,13 @@ int main(int argc, char* argv[]) {
   current.pathContribution = CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents));
 
   // integration
+  stopwatch.start();
+
   for (;;) {
     samples++;
     std::cout << "\rSamples: " << samples << std::flush;
     if (samples % pixelWidth) {
-      gettimeofday(&currentTime, NULL);
-      if (ltime < ((currentTime.tv_sec - startTime.tv_sec) + (currentTime.tv_usec - startTime.tv_usec) * 1.0E-6)) break;
+      if (stopwatch.getTime() > runningTime) break;
     }
 
     // sample the path

@@ -5,18 +5,18 @@
 // 2015/01/26: Changed the default parameters. Fixed the bug that the normal was incorrectly flipped for diffuse
 // surfaces (thanks to Hao Qin).
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/time.h>
 
 #include <fstream>
 #include <iostream>
 
+#include "Color.hpp"
 #include "Random.hpp"
+#include "Ray.hpp"
 #include "Sphere.hpp"
 #include "Vector3.hpp"
 
-const double PI = 3.14159265358979;
+constexpr double PI = 3.14159265358979;
 
 // parameters
 const int minPathLength = 3;  // avoid sampling direct illumination
@@ -47,7 +47,7 @@ Sphere sph[] = {Sphere(6.0, Vector3(10, 70, 51.6), Color(100., 100., 100.), LGHT
 
 Vector3 VecRandom(const double rnd1, const double rnd2) {
   const double temp1 = 2.0 * PI * rnd1, temp2 = 2.0 * rnd2 - 1.0;
-  const double s = sin(temp1), c = cos(temp1), t = sqrt(1.0 - temp2 * temp2);
+  const double s = std::sin(temp1), c = std::cos(temp1), t = std::sqrt(1.0 - temp2 * temp2);
   return Vector3(s * t, temp2, c * t);
 }
 Vector3 VecCosine(const Vector3& n, const double g, const double rnd1, const double rnd2) {
@@ -95,21 +95,10 @@ struct Camera {
   double dist;
   Camera() = default;
   Camera(const Vector3& origin, const Vector3& lookAt, const double fov) : origin(origin) {
-    dist = pixelHeight / (2.0 * tan((fov / 2.0) * (PI / 180.0)));
+    dist = pixelHeight / (2.0 * std::tan((fov / 2.0) * (PI / 180.0)));
     w = (lookAt - origin).normalize();
     u = cross(w, Vector3(0.0, 1.0, 0.0)).normalize();
     v = cross(u, w);
-  }
-  void set(const Vector3& origin, const Vector3& lookAt, const double fov) {
-    this->origin = origin;
-    dist = pixelHeight / (2.0 * tan((fov / 2.0) * (PI / 180.0)));
-    w = (lookAt - origin).normalize();
-    u = cross(w, Vector3(0.0, 1.0, 0.0)).normalize();
-    v = cross(u, w);
-
-    std::cout << "w: " << w << std::endl;
-    std::cout << "u: " << u << std::endl;
-    std::cout << "v: " << v << std::endl;
   }
 };
 
@@ -220,15 +209,15 @@ void InitRandomNumbers() {
 }
 
 // local sampling PDFs and standard terms
-inline double GeometryTerm(const Vertex e0, const Vertex e1) {
+inline double GeometryTerm(const Vertex& e0, const Vertex& e1) {
   const Vector3 dv = e1.point - e0.point;
   const double d2 = dot(dv, dv);
-  return fabs(dot(e0.normal, dv) * dot(e1.normal, dv)) / (d2 * d2);
+  return std::abs(dot(e0.normal, dv) * dot(e1.normal, dv)) / (d2 * d2);
 }
-inline double DirectionToArea(const Vertex current, const Vertex next) {
+inline double DirectionToArea(const Vertex& current, const Vertex& next) {
   const Vector3 dv = next.point - current.point;
   const double d2 = dot(dv, dv);
-  return fabs(dot(next.normal, dv)) / (d2 * sqrt(d2));
+  return std::abs(dot(next.normal, dv)) / (d2 * sqrt(d2));
 }
 
 inline double GlossyBRDF(const Vector3& wi, const Vector3& n, const Vector3& wo) {
@@ -236,7 +225,7 @@ inline double GlossyBRDF(const Vector3& wi, const Vector3& n, const Vector3& wo)
   const double win = dot(wi, n);
   const Vector3 reflected = (-wi).reflect(n);
   return (glossiness + 2.0) / (2.0 * PI) * pow(std::fmax(dot(reflected, wo), 0.0), glossiness) /
-         std::fmax(fabs(win), fabs(won));
+         std::fmax(std::abs(win), std::abs(won));
 }
 inline double GlossyPDF(const Vector3& wi, const Vector3& n, const Vector3& wo) {
   const Vector3 reflected = (-wi).reflect(n);
@@ -245,7 +234,7 @@ inline double GlossyPDF(const Vector3& wi, const Vector3& n, const Vector3& wo) 
 
 inline double LambertianBRDF(const Vector3& wi, const Vector3& normal, const Vector3& wo) { return 1.0 / PI; }
 inline double LambertianPDF(const Vector3& wi, const Vector3& normal, const Vector3& wo) {
-  return fabs(dot(wo, normal)) / PI;
+  return std::abs(dot(wo, normal)) / PI;
 }
 
 // measurement contribution function
@@ -260,7 +249,7 @@ Color PathThroughput(const Path& Xb) {
       const double c = dot(d0, camera.w);
       const double ds2 = (camera.dist / c) * (camera.dist / c);
       W = W / (c / ds2);
-      color = color * (W * fabs(dot(d0, Xb[1].normal) / dist2));
+      color = color * (W * std::abs(dot(d0, Xb[1].normal) / dist2));
     } else if (i == (Xb.vertexCount - 1)) {
       if (sph[Xb[i].id].refl == LGHT) {
         const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).normalize();
@@ -386,15 +375,13 @@ double PathProbablityDensity(const Path& sampledPath, const int pathLength, cons
           pdfValue *= DirectionToArea(sampledPath[pathLength], sampledPath[pathLength - 1]);
         } else {
           // PDF of sampling (PathLength - i)th vertex
-          Vector3 Direction0 =
-              (sampledPath[pathLength - (i - 1)].point - sampledPath[pathLength - i].point).normalize();
-          Vector3 Direction1 =
-              (sampledPath[pathLength - (i + 1)].point - sampledPath[pathLength - i].point).normalize();
+          Vector3 dir0 = (sampledPath[pathLength - (i - 1)].point - sampledPath[pathLength - i].point).normalize();
+          Vector3 dir1 = (sampledPath[pathLength - (i + 1)].point - sampledPath[pathLength - i].point).normalize();
 
           if (sph[sampledPath[pathLength - i].id].refl == DIFF) {
-            pdfValue *= LambertianPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
+            pdfValue *= LambertianPDF(dir0, sampledPath[pathLength - i].normal, dir1);
           } else if (sph[sampledPath[pathLength - i].id].refl == GLOS) {
-            pdfValue *= GlossyPDF(Direction0, sampledPath[pathLength - i].normal, Direction1);
+            pdfValue *= GlossyPDF(dir0, sampledPath[pathLength - i].normal, dir1);
           }
           pdfValue *= DirectionToArea(sampledPath[pathLength - i], sampledPath[pathLength - (i + 1)]);
         }
@@ -442,6 +429,7 @@ Ray SampleLightSources(const double rnd1, const double rnd2) {
   const Vector3 direction = VecRandom(rnd1, rnd2);
   return Ray(sph[light_id].position + (direction * sph[light_id].radius), direction);
 }
+
 Path GenerateLightPath(const int maxLightEvents) {
   Path lightPath;
   lightPath.vertexCount = 0;
@@ -469,6 +457,7 @@ Ray SampleCamera(const double rnd1, const double rnd2) {
   const Vector3 sw = camera.w * camera.dist;
   return Ray(camera.origin, (su + sv + sw).normalize());
 }
+
 Path GenerateEyePath(const int maxEyeEvents) {
   Path result;
   result.vertexCount = 0;
@@ -565,7 +554,7 @@ int main(int argc, char* argv[]) {
   const int ltime = (argc >= 2) ? std::fmax(atoi(argv[1]), 0) : 60 * 3;
   std::cout << ltime << std::endl;
 
-  camera.set(Vector3(50.0, 40.8, 220.0), Vector3(50.0, 40.8, 0.0), 40.0);
+  camera = Camera(Vector3(50.0, 40.8, 220.0), Vector3(50.0, 40.8, 0.0), 40.0);
 
   struct timeval startTime, currentTime;
   gettimeofday(&startTime, NULL);
@@ -574,7 +563,7 @@ int main(int argc, char* argv[]) {
   // estimate normalization constant
   double b = 0.0;
   for (int i = 0; i < N_Init; i++) {
-    fprintf(stderr, "\rPSSMLT Initializing: %5.2f", 100.0 * i / (N_Init));
+    std::cout << "\rPSSMLT Initializing: " << 100.0 * i / (N_Init) << std::flush;
     InitRandomNumbers();
     b += CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents)).sc;
   }

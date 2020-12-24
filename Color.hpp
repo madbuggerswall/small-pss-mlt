@@ -25,7 +25,19 @@ struct Color {
     blue *= rhs.blue;
     return *this;
   }
-
-  inline double max() const { return std::fmax(std::fmax(red, green), blue); }
+  inline Color& operator+=(const Color& rhs) {
+    red += rhs.red;
+    green += rhs.green;
+    blue += rhs.blue;
+    return *this;
+  }
+  inline Color& operator-=(const Color& rhs) {
+    red -= rhs.red;
+    green -= rhs.green;
+    blue -= rhs.blue;
+    return *this;
+  }
+  
+	inline double max() const { return std::fmax(std::fmax(red, green), blue); }
 };
 #endif

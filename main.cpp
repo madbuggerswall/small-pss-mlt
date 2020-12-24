@@ -8,10 +8,11 @@
 #include <sys/time.h>
 
 #include <fstream>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 
 #include "Color.hpp"
+#include "Image.hpp"
 #include "Random.hpp"
 #include "Ray.hpp"
 #include "Sphere.hpp"
@@ -107,10 +108,7 @@ struct Camera {
 Camera camera;
 const int camera_id = -2;
 // image
-Color image[pixelWidth * pixelHeight];
-
-// tone mapping
-int toInt(double x) { return int(pow(1 - exp(-x), 1 / 2.2) * 255 + .5); }
+Image image(pixelHeight, pixelWidth);
 
 // path data
 struct Vertex {
@@ -149,13 +147,17 @@ struct PathContribution {
   Contribution operator[](int index) const { return contributions[index]; }
 };
 
-void AccumulatePathContribution(const PathContribution& pathContrib, const double mScaling) {
+void accumulatePathContribution(const PathContribution& pathContrib, const double scale) {
   if (pathContrib.sc == 0) return;
   for (int i = 0; i < pathContrib.contributionCount; i++) {
-    const int ix = int(pathContrib[i].x), iy = int(pathContrib[i].y);
-    const Color color = pathContrib[i].color * mScaling;
-    if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) continue;
-    image[ix + iy * pixelWidth] = image[ix + iy * pixelWidth] + color;
+    const int ix = int(pathContrib[i].x);
+    const int iy = int(pathContrib[i].y);
+    const Color color = pathContrib[i].color * scale;
+    if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) {
+      std::cout << "If ix&iy out pf bounds." << std::endl;
+      continue;
+    }
+    image[iy * pixelWidth + ix] += color;
   }
 }
 
@@ -174,6 +176,7 @@ inline double perturb(const double value, const double s1, const double s2) {
   }
   return result;
 }
+
 struct MarkovChain {
   double states[numStates];
   PathContribution pathContribution;
@@ -558,9 +561,6 @@ int main(int argc, char* argv[]) {
 
   camera = Camera(Vector3(50.0, 40.8, 220.0), Vector3(50.0, 40.8, 0.0), 40.0);
 
-  // struct timeval startTime, currentTime;
-  // gettimeofday(&startTime, NULL);
-
   Stopwatch stopwatch;
 
   // PSSMLT
@@ -608,35 +608,14 @@ int main(int argc, char* argv[]) {
 
     // accumulate samples
     if (proposal.pathContribution.sc > 0.0)
-      AccumulatePathContribution(proposal.pathContribution,
+      accumulatePathContribution(proposal.pathContribution,
                                  (a + isLargeStepDone) / (proposal.pathContribution.sc / b + largeStepProb));
     if (current.pathContribution.sc > 0.0)
-      AccumulatePathContribution(current.pathContribution,
+      accumulatePathContribution(current.pathContribution,
                                  (1.0 - a) / (current.pathContribution.sc / b + largeStepProb));
 
     // update the chain
     if (Random::fraction() <= a) current = proposal;
   }
-
-  std::cout << std::endl << "Writing file..." << std::endl;
-  // write out .ppm
-  std::string fileName;
-  if (argc > 2)
-    fileName = std::string(argv[2]) + ".ppm";
-  else
-    fileName = "output.ppm";
-
-  std::ofstream outputFile(fileName, std::ios::binary);
-
-  outputFile << "P6" << std::endl;
-  outputFile << pixelWidth << "	" << pixelHeight << std::endl;
-  outputFile << "255" << std::endl;
-
-  //	Divide the color total by the number of samples.
-  double s = double(pixelWidth * pixelHeight) / double(samples);
-  for (int i = 0; i < pixelWidth * pixelHeight; i++) {
-    outputFile << static_cast<unsigned char>(toInt(image[i].red * s))
-               << static_cast<unsigned char>(toInt(image[i].green * s))
-               << static_cast<unsigned char>(toInt(image[i].blue * s));
-  }
+  image.writeToFile(argv[2], samples);
 }

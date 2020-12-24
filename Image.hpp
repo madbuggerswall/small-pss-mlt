@@ -13,7 +13,7 @@ class Image {
   size_t height;
   size_t width;
   std::vector<Color> pixels;
-  Image(size_t height, size_t width) : height(height), width(width) { pixels = std::vector<Color>(height * width); }
+  Image(size_t height, size_t width) : height(height), width(width) { pixels.reserve(height * width); }
 
   Color& operator[](int index) { return pixels[index]; }
   Color operator[](int index) const { return pixels[index]; }

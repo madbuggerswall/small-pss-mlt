@@ -253,8 +253,8 @@ Color PathThroughput(const Path& Xb) {
       d0 = d0 * (1.0 / sqrt(dist2));
       const double c = dot(d0, camera.w);
       const double ds2 = (camera.dist / c) * (camera.dist / c);
-      W = W / (c / ds2);
-      color = color * (W * std::abs(dot(d0, Xb[1].normal) / dist2));
+      W /= (c / ds2);
+      color *= (W * std::abs(dot(d0, Xb[1].normal) / dist2));
     } else if (i == (Xb.vertexCount - 1)) {
       if (sph[Xb[i].id].refl == LGHT) {
         const Vector3 d0 = (Xb[i - 1].point - Xb[i].point).normalize();
@@ -430,11 +430,14 @@ void TracePath(Path& path, const Ray& ray, const int rayLevel, const int maxRayL
   }
 }
 
+// Get an initial ray coming out from a light source to a random direction.
 Ray SampleLightSources(const double rnd1, const double rnd2) {
   const Vector3 direction = VecRandom(rnd1, rnd2);
   return Ray(sph[light_id].position + (direction * sph[light_id].radius), direction);
 }
 
+// Generates a path originating from a light source.
+// maxLightEvents: Maximum number of vertices in an eye path.
 Path GenerateLightPath(const int maxLightEvents) {
   Path lightPath;
   lightPath.vertexCount = 0;
@@ -456,6 +459,7 @@ Path GenerateLightPath(const int maxLightEvents) {
   return lightPath;
 }
 
+// Get an initial ray coming out from the camera to a random direction.
 Ray SampleCamera(const double rnd1, const double rnd2) {
   const Vector3 su = camera.u * -(0.5 - rnd1) * pixelWidth;
   const Vector3 sv = camera.v * (0.5 - rnd2) * pixelHeight;
@@ -463,6 +467,8 @@ Ray SampleCamera(const double rnd1, const double rnd2) {
   return Ray(camera.origin, (su + sv + sw).normalize());
 }
 
+// Generates a path originating from the camera.
+// maxEyeEvents: Maximum number of vertices in an eye path.
 Path GenerateEyePath(const int maxEyeEvents) {
   Path result;
   result.vertexCount = 0;
@@ -530,12 +536,12 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
       sampledPath.vertexCount = numEyeVertices + numLightVertices;
 
       // evaluate the path
-      Color f = PathThroughput(sampledPath);
+      Color color = PathThroughput(sampledPath);
       double pathPDF = PathProbablityDensity(sampledPath, pathLength, numEyeVertices, numLightVertices);
       double weight = MISWeight(sampledPath, numEyeVertices, numLightVertices, pathLength);
       if ((weight <= 0.0) || (pathPDF <= 0.0)) continue;
 
-      Color color = f * (weight / pathPDF);
+      color *= (weight / pathPDF);
       if (color.max() <= 0.0) continue;
 
       // store the pixel contribution

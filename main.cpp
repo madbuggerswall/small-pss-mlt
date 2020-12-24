@@ -140,21 +140,21 @@ struct PathContribution {
 
  public:
   int contributionCount;
-  double sc;
-  PathContribution() : contributionCount(0), sc(0.0) {}
+  double scalarContrib;
+  PathContribution() : contributionCount(0), scalarContrib(0.0) {}
 
   Contribution& operator[](int index) { return contributions[index]; }
   Contribution operator[](int index) const { return contributions[index]; }
 };
 
 void accumulatePathContribution(const PathContribution& pathContrib, const double scale) {
-  if (pathContrib.sc == 0) return;
+  if (pathContrib.scalarContrib == 0) return;
   for (int i = 0; i < pathContrib.contributionCount; i++) {
     const int ix = int(pathContrib[i].x);
     const int iy = int(pathContrib[i].y);
     const Color color = pathContrib[i].color * scale;
     if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) {
-      std::cout << "If ix&iy out pf bounds." << std::endl;
+      std::cout << "If ix&iy out of bounds." << std::endl;
       continue;
     }
     image[iy * pixelWidth + ix] += color;
@@ -497,7 +497,7 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
                               const int specifiedNumLightVertices = -1) {
   PathContribution result;
   result.contributionCount = 0;
-  result.sc = 0.0;
+  result.scalarContrib = 0.0;
   const bool specified = (specifiedNumEyeVertices != -1) && (specifiedNumLightVertices != -1);
 
   // maxEvents = the maximum number of vertices
@@ -543,7 +543,7 @@ PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const 
       result.contributionCount++;
 
       // scalar contribution function
-      result.sc = std::fmax(color.max(), result.sc);
+      result.scalarContrib = std::fmax(color.max(), result.scalarContrib);
 
       // return immediately if the technique is specified
       if (specified && (specifiedNumEyeVertices == numEyeVertices) && (specifiedNumLightVertices == numLightVertices))
@@ -570,7 +570,7 @@ int main(int argc, char* argv[]) {
     std::cout << std::fixed;
     std::cout << std::setprecision(1) << "\rPSSMLT Initializing: " << 100.0 * i / (N_Init) << std::flush;
     InitRandomNumbers();
-    b += CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents)).sc;
+    b += CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents)).scalarContrib;
   }
   b /= double(N_Init);
   fprintf(stderr, "\n");
@@ -603,16 +603,17 @@ int main(int argc, char* argv[]) {
     proposal.pathContribution = CombinePaths(GenerateEyePath(maxEvents), GenerateLightPath(maxEvents));
 
     double a = 1.0;
-    if (current.pathContribution.sc > 0.0)
-      a = std::fmax(std::fmin(1.0, proposal.pathContribution.sc / current.pathContribution.sc), 0.0);
+    if (current.pathContribution.scalarContrib > 0.0)
+      a = std::fmax(std::fmin(1.0, proposal.pathContribution.scalarContrib / current.pathContribution.scalarContrib),
+                    0.0);
 
     // accumulate samples
-    if (proposal.pathContribution.sc > 0.0)
+    if (proposal.pathContribution.scalarContrib > 0.0)
       accumulatePathContribution(proposal.pathContribution,
-                                 (a + isLargeStepDone) / (proposal.pathContribution.sc / b + largeStepProb));
-    if (current.pathContribution.sc > 0.0)
+                                 (a + isLargeStepDone) / (proposal.pathContribution.scalarContrib / b + largeStepProb));
+    if (current.pathContribution.scalarContrib > 0.0)
       accumulatePathContribution(current.pathContribution,
-                                 (1.0 - a) / (current.pathContribution.sc / b + largeStepProb));
+                                 (1.0 - a) / (current.pathContribution.scalarContrib / b + largeStepProb));
 
     // update the chain
     if (Random::fraction() <= a) current = proposal;

@@ -2,8 +2,8 @@
 #define VECTOR3_HPP
 
 #include <cmath>
-#include <utility>
 #include <iostream>
+#include <utility>
 
 // vector: position, also color (r,g,b) (extended from smallpt)
 struct Vector3 {
@@ -44,15 +44,10 @@ struct Vector3 {
   inline Vector3 operator-(double rhs) const { return Vector3(x - rhs, y - rhs, z - rhs); }
   inline Vector3 operator*(double scalar) const { return Vector3(x * scalar, y * scalar, z * scalar); }
 
-  friend double dot(const Vector3& lhs, const Vector3& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z; }
-  friend Vector3 cross(const Vector3& lhs, const Vector3& rhs) {
-    return Vector3(lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x);
-  }
-	
-	friend std::ostream& operator<<(std::ostream& out, const Vector3& vector) {
-    return out << vector.x << ' ' << vector.y << ' ' << vector.z;
-  }
- 
+  friend double dot(const Vector3& lhs, const Vector3& rhs);
+  friend Vector3 cross(const Vector3& lhs, const Vector3& rhs);
+  friend std::ostream& operator<<(std::ostream& out, const Vector3& vector);
+
   inline double max() const { return std::fmax(std::fmax(x, y), z); }
   inline Vector3 onb(const Vector3& n) const {
     Vector3 u, w, v = n;
@@ -69,4 +64,14 @@ struct Vector3 {
                    dot(*this, Vector3(u.z, v.z, w.z)));
   }
 };
+
+// Friend function definitions
+double dot(const Vector3& lhs, const Vector3& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z; }
+Vector3 cross(const Vector3& lhs, const Vector3& rhs) {
+  return Vector3(lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x);
+}
+std::ostream& operator<<(std::ostream& out, const Vector3& vector) {
+  return out << vector.x << ' ' << vector.y << ' ' << vector.z;
+}
+
 #endif

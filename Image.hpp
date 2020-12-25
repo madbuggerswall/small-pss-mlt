@@ -1,19 +1,19 @@
 #ifndef IMAGE_HPP
 #define IMAGE_HPP
 
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "Color.hpp"
+#include "Parameters.hpp"
 
 class Image {
  public:
-  size_t height;
-  size_t width;
-  std::vector<Color> pixels;
-  Image(size_t height, size_t width) : height(height), width(width) { pixels.reserve(height * width); }
+  std::array<Color, pixelHeight * pixelWidth> pixels;
+
+  Image() {}
 
   Color& operator[](int index) { return pixels[index]; }
   Color operator[](int index) const { return pixels[index]; }
@@ -33,6 +33,9 @@ void Image::writeToFile(std::string fileName, int samplesPerPixel) {
     fileName = "output.ppm";
 
   std::ofstream outputFile(fileName, std::ios::binary);
+
+  auto width = pixelWidth;
+  auto height = pixelHeight;
 
   outputFile << "P6" << std::endl;
   outputFile << width << "	" << height << std::endl;

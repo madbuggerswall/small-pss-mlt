@@ -51,7 +51,7 @@ const int light_id = 0;
 const double light_area = (4.0 * PI * sph[light_id].radius * sph[light_id].radius);
 
 // Intersect with all spheres in the scene.
-bool intersect(const Ray& ray, double& t, int& id) { 
+bool intersect(const Ray& ray, double& t, int& id) {
   int n = sizeof(sph) / sizeof(Sphere);
   double distance, inf = 1e20;
   t = inf;
@@ -455,10 +455,12 @@ int main(int argc, char* argv[]) {
   // integration
   stopwatch.start();
 
-  for (;;) {
+	const auto allPixels = pixelWidth * pixelHeight;
+  while (true) {
     samples++;
-    std::cout << "\rSamples: " << samples << std::flush;
-    if (samples % pixelWidth) {
+    
+		if (!(samples % pixelWidth)) {
+      std::cout << "\rSamples: " << samples << std::flush;
       if (stopwatch.getTime() > runningTime) break;
     }
 
@@ -481,12 +483,11 @@ int main(int argc, char* argv[]) {
 
     // accumulate samples
     if (proposal.pathContribution.scalarContrib > 0.0)
-      accumulatePathContribution(proposal.pathContribution,
-                                 (a + isLargeStepDone) / (proposal.pathContribution.scalarContrib / b + largeStepProb),
-                                 image);
+      proposal.pathContribution.accumulatePathContribution(
+          (a + isLargeStepDone) / (proposal.pathContribution.scalarContrib / b + largeStepProb), image);
     if (current.pathContribution.scalarContrib > 0.0)
-      accumulatePathContribution(current.pathContribution,
-                                 (1.0 - a) / (current.pathContribution.scalarContrib / b + largeStepProb), image);
+      current.pathContribution.accumulatePathContribution(
+          (1.0 - a) / (current.pathContribution.scalarContrib / b + largeStepProb), image);
 
     // update the chain
     if (Random::fraction() <= a) current = proposal;

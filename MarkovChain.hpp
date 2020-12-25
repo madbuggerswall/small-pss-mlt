@@ -140,21 +140,17 @@ struct PathContribution {
 
   Contribution& operator[](int index) { return contributions[index]; }
   Contribution operator[](int index) const { return contributions[index]; }
-};
 
-void accumulatePathContribution(const PathContribution& pathContrib, const double scale, Image& image) {
-  if (pathContrib.scalarContrib == 0) return;
-  for (int i = 0; i < pathContrib.contributionCount; i++) {
-    const int ix = int(pathContrib[i].x);
-    const int iy = int(pathContrib[i].y);
-    const Color color = pathContrib[i].color * scale;
-    if ((ix < 0) || (ix >= pixelWidth) || (iy < 0) || (iy >= pixelHeight)) {
-      std::cout << "If ix&iy out of bounds." << std::endl;
-      continue;
+  void accumulatePathContribution(const double scale, Image& image) {
+    if (scalarContrib == 0) return;
+    for (int i = 0; i < contributionCount; i++) {
+      const int ix = int(contributions[i].x);
+      const int iy = int(contributions[i].y);
+      const Color color = contributions[i].color * scale;
+      image[iy * pixelWidth + ix] += color;
     }
-    image[iy * pixelWidth + ix] += color;
   }
-}
+};
 
 struct MarkovChain {
   std::array<double, numStates> states;
@@ -205,12 +201,12 @@ struct MarkovChain {
   MarkovChain largeStep() const {
     MarkovChain result;
     result.pathContribution = pathContribution;
-    for (int i = 0; i < numStates; i++) result.states[i] = Random::fraction();
     return result;
   }
+
   MarkovChain mutate() const {
     MarkovChain result;
-    result.pathContribution = (*this).pathContribution;
+    result.pathContribution = pathContribution;
 
     // pixel location
     result.states[0] = perturb(states[0], 2.0 / double(pixelWidth + pixelHeight), 0.1);

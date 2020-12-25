@@ -7,6 +7,7 @@
 
 #include <sys/time.h>
 
+#include <array>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -114,14 +115,58 @@ Image image(pixelHeight, pixelWidth);
 struct Vertex {
   Vector3 point, normal;
   int id;
-  Vertex(){};
+
+  Vertex() = default;
   Vertex(const Vector3& point, const Vector3& normal, int id) : point(point), normal(normal), id(id) {}
+
+  // Copy constructor
+  Vertex(const Vertex& other) : point(other.point), normal(other.normal), id(other.id) {}
+
+  // Move constructor
+  Vertex(Vertex&& other) : point(std::move(other.point)), normal(std::move(other.normal)), id(std::move(other.id)) {}
+
+  // Copy assignment
+  Vertex& operator=(const Vertex& other) {
+    point = other.point;
+    normal = other.normal;
+    id = other.id;
+    return *this;
+  }
+
+  // Move assignment
+  Vertex& operator=(Vertex&& other) {
+    point = std::move(other.point);
+    normal = std::move(other.normal);
+    id = std::move(other.id);
+    return *this;
+  }
 };
 
 struct Path {
-  Vertex vertices[maxEvents];
+  std::array<Vertex, maxEvents> vertices;
   int vertexCount;
+
   Path() { vertexCount = 0; }
+
+  // Copy constructor
+  Path(const Path& other) : vertices(other.vertices), vertexCount(other.vertexCount) {}
+
+  // Move constructor
+  Path(Path&& other) : vertices(std::move(other.vertices)), vertexCount(std::move(other.vertexCount)) {}
+
+  // Copy assignment
+  Path& operator=(const Path& other) {
+    vertices = other.vertices;
+    vertexCount = other.vertexCount;
+    return *this;
+  }
+
+  // Move assignment
+  Path& operator=(Path&& other) {
+    vertices = std::move(other.vertices);
+    vertexCount = std::move(other.vertexCount);
+    return *this;
+  }
 
   Vertex& operator[](int index) { return vertices[index]; }
   Vertex operator[](int index) const { return vertices[index]; }
@@ -130,18 +175,68 @@ struct Path {
 struct Contribution {
   double x, y;
   Color color;
-  Contribution(){};
+
+  Contribution() {}
+
   Contribution(double x, double y, const Color& color) : x(x), y(y), color(color) {}
+
+  // Copy constructor
+  Contribution(const Contribution& other) : x(other.x), y(other.y), color(other.color) {}
+
+  // Move constructor
+  Contribution(Contribution&& other) : x(std::move(other.x)), y(std::move(other.y)), color(std::move(other.color)) {}
+
+  // Copy assignment
+  Contribution& operator=(const Contribution& other) {
+    x = other.x;
+    y = other.y;
+    color = other.color;
+    return *this;
+  }
+
+  // Move assignment
+  Contribution& operator=(Contribution&& other) {
+    x = std::move(other.x);
+    y = std::move(other.y);
+    color = std::move(other.color);
+    return *this;
+  }
 };
 
 struct PathContribution {
- private:
-  Contribution contributions[maxEvents * maxEvents];
-
- public:
+  std::array<Contribution, maxEvents * maxEvents> contributions;
   int contributionCount;
   double scalarContrib;
+
   PathContribution() : contributionCount(0), scalarContrib(0.0) {}
+
+  // Copy constructor
+  PathContribution(const PathContribution& other) :
+      contributions(other.contributions),
+      contributionCount(other.contributionCount),
+      scalarContrib(other.scalarContrib) {}
+
+  // Move constructor
+  PathContribution(PathContribution&& other) :
+      contributions(std::move(other.contributions)),
+      contributionCount(std::move(other.contributionCount)),
+      scalarContrib(std::move(other.scalarContrib)) {}
+
+  // Copy assignment
+  PathContribution& operator=(const PathContribution& other) {
+    contributions = other.contributions;
+    contributionCount = other.contributionCount;
+    scalarContrib = other.scalarContrib;
+    return *this;
+  }
+
+  // Move assignment
+  PathContribution& operator=(PathContribution&& other) {
+    contributions = std::move(other.contributions);
+    contributionCount = std::move(other.contributionCount);
+    scalarContrib = std::exchange(scalarContrib, 0);
+    return *this;
+  }
 
   Contribution& operator[](int index) { return contributions[index]; }
   Contribution operator[](int index) const { return contributions[index]; }
@@ -178,11 +273,35 @@ inline double perturb(const double value, const double s1, const double s2) {
 }
 
 struct MarkovChain {
-  double states[numStates];
+  std::array<double, numStates> states;
   PathContribution pathContribution;
+
   MarkovChain() {
     for (int i = 0; i < numStates; i++) states[i] = Random::fraction();
   }
+
+  // Copy constructor
+  MarkovChain(const MarkovChain& other) : states(other.states), pathContribution(other.pathContribution) {}
+
+  // Move constructor
+  MarkovChain(MarkovChain&& other) :
+      states(std::move(other.states)),
+      pathContribution(std::move(other.pathContribution)) {}
+
+  // Copy assignment
+  MarkovChain& operator=(const MarkovChain& other) {
+    states = other.states;
+    pathContribution = other.pathContribution;
+    return *this;
+  }
+
+  // Move assignment
+  MarkovChain& operator=(MarkovChain&& other) {
+    states = std::move(other.states);
+    pathContribution = std::move(other.pathContribution);
+    return *this;
+  }
+
   MarkovChain largeStep() const {
     MarkovChain result;
     result.pathContribution = (*this).pathContribution;
@@ -502,8 +621,6 @@ double MISWeight(const Path& sampledPath, const int numEyeVertices, const int nu
 PathContribution CombinePaths(const Path& eyePath, const Path& lightPath, const int specifiedNumEyeVertices = -1,
                               const int specifiedNumLightVertices = -1) {
   PathContribution result;
-  result.contributionCount = 0;
-  result.scalarContrib = 0.0;
   const bool specified = (specifiedNumEyeVertices != -1) && (specifiedNumLightVertices != -1);
 
   // maxEvents = the maximum number of vertices

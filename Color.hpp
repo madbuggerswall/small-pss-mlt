@@ -10,7 +10,7 @@ struct Color {
   Color(double red, double green, double blue) : red(red), green(green), blue(blue) {}
  // Copy & Move constructor
   Color(const Color& other) : red(other.red), green(other.green), blue(other.blue) {}
-  Color(Color&& other) : red(std::exchange(other.red, 0)), green(std::exchange(other.green, 0)), blue(std::exchange(other.blue, 0)) {}
+  Color(Color&& other) : red(std::move(other.red)), green(std::move(other.green)), blue(std::move(other.blue)) {}
 
   // Copy & Move assignment
   Color& operator=(const Color& other) {
